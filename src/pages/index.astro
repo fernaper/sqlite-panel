@@ -1,5 +1,14 @@
 ---
+export const prerender = false; // Mark this route as server-rendered
 
+const sessionCookie = Astro.cookies.get('session');
+const isLoggedIn = sessionCookie && sessionCookie.value;
+
+if (isLoggedIn) {
+  return Astro.redirect('/admin');
+} else {
+  return Astro.redirect('/login');
+}
 ---
 
 <html lang="en">

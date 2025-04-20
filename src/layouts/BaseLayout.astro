@@ -1,0 +1,60 @@
+---
+// You must use both of them...
+import ThemeSwitcher from '@/components/ui/ThemeSwitcher.tsx';
+import LocaleSwitcher from '@/components/ui/LocaleSwitcher.tsx';
+import '@/styles/global.css'; // Ensure global styles are imported
+
+interface Props {
+	title: string;
+	description?: string;
+}
+
+const { title, description = 'SQLite Panel - Manage your SQLite databases with ease.' } = Astro.props;
+
+// Basic theme setup - assumes ThemeSwitcher handles persistence
+const theme = Astro.cookies.get('theme')?.value || 'system'; // Default to system or light
+---
+
+<!doctype html>
+<html lang="en" class={theme === 'dark' ? 'dark' : ''} data-theme={theme}>
+<head>
+	<meta charset="UTF-8" />
+	<meta name="description" content={description} />
+	<meta name="viewport" content="width=device-width" />
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+	<meta name="generator" content={Astro.generator} />
+	<title>{title}</title>
+	<!-- Removed ViewTransitions component -->
+  <script is:inline>
+    // Script to apply theme class before page load to prevent FOUC
+    const theme = (() => {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
+        return localStorage.getItem('theme');
+      }
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+      }
+      return 'dark'; // Default to dark if no preference or storage
+    })();
+
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+
+    // Store the theme preference if not already set
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem('theme')) {
+       localStorage.setItem('theme', theme);
+    }
+  </script>
+</head>
+<body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+  <!-- Header removed from here as it's placed per-page in login.astro -->
+	<main>
+		<slot />
+	</main>
+</body>
+</html>

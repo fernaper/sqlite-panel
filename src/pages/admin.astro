@@ -1,0 +1,79 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import Card from '@/components/ui/Card.tsx';
+import Button from '@/components/ui/Button.tsx';
+import TextInput from '@/components/ui/TextInput.tsx'; // For SQL input
+// Import other components as needed, e.g., Table component if available
+import TableViewer from '@/components/layout/TableViewer.tsx';
+import TablesList from '@/components/layout/TablesList.tsx';
+import ThemeSwitcher from '@/components/ui/ThemeSwitcher';
+import LocaleSwitcher from '@/components/ui/LocaleSwitcher';
+
+export const prerender = false; // Mark this route as server-rendered
+
+const currentTable = 'users'; // Example selected table
+const queryResult = null; // Placeholder for SQL query results
+
+const sessionCookie = Astro.cookies.get('session');
+console.log('Session cookie in admin.astro:', sessionCookie);
+const dbPath = sessionCookie ? JSON.parse(sessionCookie.value).dbPath : '/sqlite/data.db';
+console.log('dbPath in admin.astro:', dbPath);
+---
+ 
+<BaseLayout title="Admin Panel - SQLite Panel">
+  <div class="flex h-screen bg-gray-100 dark:bg-gray-900">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white dark:bg-gray-800 p-4 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+      <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Tables</h2>
+      <nav class="flex-grow max-h-full overflow-y-auto">
+        <TablesList client:load />
+      </nav>
+      <div class="mx-auto flex flex-col gap-2">
+        <ThemeSwitcher client:load />
+        <LocaleSwitcher className='w-full' client:load />
+        <form action="/api/logout" method="get">
+          <Button type="submit" className="px-12" variant="empty" client:load>
+            Logout
+          </Button>
+        </form>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 px-6 pb-6 overflow-auto">
+      <h1 class="text-sm font-bold my-3 text-gray-500 dark:text-gray-300">Database: {dbPath}</h1>
+
+      {/* SQL Query Executor */}
+      <Card className="mb-6">
+        <h3 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Execute SQL</h3>
+        <form> {/* TODO: Handle form submission */}
+          {/* Replaced TextInput with standard textarea */}
+          <textarea
+            id="sqlQuery"
+            name="sqlQuery"
+            placeholder="SELECT * FROM users WHERE id = 1;"
+            rows={4}
+            class="w-full p-2 font-mono box-border outline-1 outline-gray-400 dark:outline-gray-800 bg-gray-200 dark:bg-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-300"
+          ></textarea>
+          <Button type="submit" className="mt-3" client:load>Run Query</Button>
+        </form>
+        {queryResult && (
+          <div class="mt-4">
+            {/* TODO: Display query results */}
+            <pre class="bg-gray-50 dark:bg-gray-800 p-3 rounded text-sm overflow-auto">
+              {JSON.stringify(queryResult, null, 2)}
+            </pre>
+          </div>
+        )}
+      </Card>
+
+      {/* Render TableViewer component */}
+      <TableViewer client:load />
+
+      {!currentTable && !queryResult && (
+         <p class="text-gray-600 dark:text-gray-400">Select a table from the sidebar or run a query.</p>
+      )}
+    </main>
+  </div>
+
+</BaseLayout>

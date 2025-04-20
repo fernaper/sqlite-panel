@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Minimalist global scrollbar styles */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+/* Webkit Scrollbar */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scroll-thumb);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scroll-thumb-hover);
+}
+
+/* Light mode variables */
+:root {
+  --scroll-thumb: #d1d5db; /* Tailwind's gray-300 */
+  --scroll-thumb-hover: #9ca3af; /* gray-400 */
+}
+
+/* Dark mode variables */
+.dark {
+  --scroll-thumb: #4b5563; /* gray-600 */
+  --scroll-thumb-hover: #6b7280; /* gray-500 */
+}
