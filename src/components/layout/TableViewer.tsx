@@ -175,9 +175,9 @@ export default function TableViewer() {
             }}
             className="form-select text-sm !px-2 !py-1"
           >
-            {[10, 25, 50, 100].map((num) => (
-              <option key={num} value={num}>
-                {num}
+            {[10, 25, 50, 100, -1].map((num) => (
+              <option key={num} value={num === -1 ? tableData.pagination.total : num}>
+                {num === -1 ? 'All' : num}
               </option>
             ))}
           </Select>
