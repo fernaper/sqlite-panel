@@ -18,6 +18,9 @@ export const GET: APIRoute = async ({ cookies, request }) => {
 
     const urlParams = new URLSearchParams(request.url.split('?')[1]);
     const tableName = urlParams.get('table');
+    const page = parseInt(urlParams.get('page') || '1');
+    const itemsPerPage = parseInt(urlParams.get('itemsPerPage') || '50');
+    
     if (!tableName) {
       return new Response(JSON.stringify({ error: 'Table name is required' }), { status: 400 });
     }
@@ -28,15 +31,39 @@ export const GET: APIRoute = async ({ cookies, request }) => {
       db.all(`PRAGMA table_info(${tableName})`, (err, columns) => {
         if (err) {
           reject(err);
-        } else {
-          db.all(`SELECT * FROM ${tableName}`, (err, rows) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve({ columns, rows });
-            }
-          });
+          return;
         }
+        
+        // Get total count first
+        db.get(`SELECT COUNT(*) as total FROM ${tableName}`, (err, countResult: { total: number }) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          const offset = (page - 1) * itemsPerPage;
+          // Get paginated rows
+          db.all(
+            `SELECT * FROM ${tableName} LIMIT ? OFFSET ?`,
+            [itemsPerPage, offset],
+            (err, rows) => {
+              if (err) {
+                reject(err);
+              } else {
+                resolve({
+                  columns,
+                  rows,
+                  pagination: {
+                    total: countResult.total,
+                    page,
+                    itemsPerPage,
+                    totalPages: Math.ceil(countResult.total / itemsPerPage)
+                  }
+                });
+              }
+            }
+          );
+        });
       });
     });
 

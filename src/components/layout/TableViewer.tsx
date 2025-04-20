@@ -1,11 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Toaster, toast } from 'sonner';
+import Select from '@/components/ui/Select';
 
 export default function TableViewer() {
   const [tableName, setTableName] = useState<string | null>(null);
   const [tableData, setTableData] = useState<{
     columns: { name: string }[];
     rows: { [key: string]: any }[];
+    pagination: {
+      total: number;
+      page: number;
+      itemsPerPage: number;
+      totalPages: number;
+    };
   } | null>(null);
   const [editingCell, setEditingCell] = useState<{
     rowIndex: number;
@@ -13,6 +20,8 @@ export default function TableViewer() {
     originalValue: any;
   } | null>(null);
   const [tempValue, setTempValue] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   useEffect(() => {
     // Get tableName from URL query parameter - only runs on client
@@ -23,7 +32,10 @@ export default function TableViewer() {
     const fetchTableData = async () => {
       if (currentTableName) {
         try {
-          const response = await fetch(`/api/db/table-data?table=${currentTableName}`, { credentials: 'include' });
+          const response = await fetch(
+            `/api/db/table-data?table=${currentTableName}&page=${currentPage}&itemsPerPage=${itemsPerPage}`,
+            { credentials: 'include' }
+          );
           const data = await response.json();
           if (response.ok) {
             setTableData(data);
@@ -37,7 +49,7 @@ export default function TableViewer() {
       }
     };
     fetchTableData();
-  }, []); // Run only once on mount
+  }, [currentPage, itemsPerPage, tableName]);
 
   if (tableName === null) { // Check if tableName is still null (initial state or no param)
     return <p className="text-gray-600 dark:text-gray-400">Select a table from the sidebar.</p>;
@@ -146,6 +158,54 @@ export default function TableViewer() {
           ))}
         </tbody>
       </table>
+      </div>
+      {/* Pagination Controls */}
+      <div className="flex justify-between items-center mt-4 px-6">
+        <div className="flex items-center space-x-2">
+          <label htmlFor="itemsPerPage" className="text-sm text-gray-600 dark:text-gray-400">
+            Rows per page:
+          </label>
+          <Select
+            id="itemsPerPage"
+            value={itemsPerPage}
+            onChange={(e) => {
+              const newItemsPerPage = Number(e.target.value);
+              setItemsPerPage(newItemsPerPage);
+              setCurrentPage(1); // Reset to first page when changing items per page
+            }}
+            className="form-select text-sm !px-2 !py-1"
+          >
+            {[10, 25, 50, 100].map((num) => (
+              <option key={num} value={num}>
+                {num}
+              </option>
+            ))}
+          </Select>
+          <span className="text-sm text-gray-600 dark:text-gray-400 ml-4">
+            Total: {tableData.pagination.total} rows
+          </span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-600"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-600 dark:text-gray-400">
+            Page {tableData.pagination.page} of {tableData.pagination.totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(prev =>
+              prev < tableData.pagination.totalPages ? prev + 1 : prev
+            )}
+            disabled={currentPage >= tableData.pagination.totalPages}
+            className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-600"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </>
   );
