@@ -24,7 +24,7 @@ export default function Select({
 
   const selectContent = (
     <select
-      className={`transition-all cursor-pointer rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:ring-2 hover:ring-indigo-400 dark:hover:ring-indigo-300 ${selectClassName} ${className}`}
+      className={`cursor-pointer rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:ring-2 hover:ring-indigo-400 dark:hover:ring-indigo-300 ${selectClassName} ${className}`}
       disabled={disabled}
       {...props}
     >
@@ -35,7 +35,7 @@ export default function Select({
     return (
       <label className={labelClassName}>
         <p
-          className={`cursor-pointer text-sm font-semibold mb-1 mt-2 transition-all ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`}
+          className={`cursor-pointer text-sm font-semibold mb-1 mt-2 ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`}
         >
           {label}
         </p>

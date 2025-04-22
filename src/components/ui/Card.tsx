@@ -9,7 +9,7 @@ export default function Card({
   return (
     <div
       className={
-        `transition-all p-4 bg-gray-200 dark:bg-gray-800 rounded-lg shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-300 ${className}`
+        `p-4 bg-gray-200 dark:bg-gray-800 rounded-lg shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-300 ${className}`
       }
       {...props}
     >

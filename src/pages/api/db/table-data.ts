@@ -19,7 +19,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
     const urlParams = new URLSearchParams(request.url.split('?')[1]);
     const tableName = urlParams.get('table');
     const page = parseInt(urlParams.get('page') || '1');
-    const itemsPerPage = parseInt(urlParams.get('itemsPerPage') || '50');
+    const itemsPerPage = parseInt(urlParams.get('itemsPerPage') || '10');
     
     if (!tableName) {
       return new Response(JSON.stringify({ error: 'Table name is required' }), { status: 400 });
@@ -46,13 +46,37 @@ export const GET: APIRoute = async ({ cookies, request }) => {
           db.all(
             `SELECT * FROM ${tableName} LIMIT ? OFFSET ?`,
             [itemsPerPage, offset],
-            (err, rows) => {
+            (err, rows: { [key: string]: any }[]) => {
               if (err) {
                 reject(err);
               } else {
+                // Identify blob columns based on type from PRAGMA table_info
+                const blobColumnNames = columns
+                  .filter((col: any) => col.type.toUpperCase() === 'BLOB')
+                  .map((col: any) => col.name);
+
+                // Replace blob data with '[Blob Data]' string
+                const processedRows = rows.map(row => {
+                  const newRow: { [key: string]: any } = {};
+                  for (const colName in row) {
+                    if (blobColumnNames.includes(colName)) {
+                      newRow[colName] = '[Blob Data]';
+                    } else {
+                      const cellValue = row[colName];
+                      // Truncate string values to 1000 characters
+                      if (typeof cellValue === 'string' && cellValue.length > 1000) {
+                        newRow[colName] = cellValue.substring(0, 1000) + '...';
+                      } else {
+                        newRow[colName] = cellValue;
+                      }
+                    }
+                  }
+                  return newRow;
+                });
+
                 resolve({
                   columns,
-                  rows,
+                  rows: processedRows, // Use processedRows
                   pagination: {
                     total: countResult.total,
                     page,

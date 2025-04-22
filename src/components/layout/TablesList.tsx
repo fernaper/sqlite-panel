@@ -11,9 +11,7 @@ export default function TablesList() {
 
     const fetchTables = async () => {
       try {
-        console.log('Fetching tables...');
         const response = await fetch('/api/db/tables', { credentials: 'include' });
-        console.log('Response headers:', response.headers);
         const data = await response.json();
         if (response.ok) {
           setTables(data.tables || []);
