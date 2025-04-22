@@ -18,7 +18,7 @@ const dbPath = sessionCookie ? JSON.parse(sessionCookie.value).dbPath : '/sqlite
 <BaseLayout title="SQLite Panel">
   <div class="flex h-screen bg-gray-100 dark:bg-gray-900">
     <!-- Sidebar -->
-    <aside class="w-64 bg-white dark:bg-gray-800 p-4 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+    <aside class="w-64 bg-white dark:bg-gray-800 p-4 border-r border-gray-200 dark:border-gray-700 flex flex-col min-h-[450px]">
       <Button type="submit" className="mb-4 mx-auto flex gap-2 items-center rounded-lg" variant="none" href="/admin" client:load>
         <Logo size={56} />
         <h1 class="text-xl font-bold text-gray-900 dark:text-white">SQLite Panel</h1>
