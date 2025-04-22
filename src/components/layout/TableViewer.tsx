@@ -15,6 +15,7 @@ interface TableViewerProps {
 
 export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
   const [tableName, setTableName] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'data' | 'info'>('data'); // 'data' or 'info'
   const [tableData, setTableData] = useState<{
     columns: { name: string }[];
     rows: { [key: string]: any }[];
@@ -25,6 +26,7 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
       totalPages: number;
     };
   } | null>(null);
+  const [tableSchema, setTableSchema] = useState<QueryResult | null>(null);
   const [editingCell, setEditingCell] = useState<{
     rowIndex: number;
     columnName: string;
@@ -39,12 +41,12 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
   }>({ column: null, direction: null });
   const [hoveredColumn, setHoveredColumn] = useState<string | null>(null);
 
-  // Determine which data to use: initialData or fetched tableData
-  const dataToDisplay = initialData || tableData;
+  // Determine which data to display based on viewMode
+  const dataToDisplay = viewMode === 'data' ? (initialData || tableData) : tableSchema;
 
-  // Sort the table data
+  // Sort the table data (only applies to data view)
   const sortedData = useMemo(() => {
-    if (!sortConfig.column || !sortConfig.direction || !dataToDisplay) {
+    if (viewMode !== 'data' || !sortConfig.column || !sortConfig.direction || !dataToDisplay) {
       return dataToDisplay?.rows;
     }
 
@@ -69,11 +71,11 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
       const comparison = String(aValue).localeCompare(String(bValue));
       return sortConfig.direction === 'asc' ? comparison : -comparison;
     });
-  }, [dataToDisplay?.rows, sortConfig]);
+  }, [dataToDisplay?.rows, sortConfig, viewMode]);
 
   const handleSort = (columnName: string) => {
-    // Only allow sorting if not displaying initialData (query results)
-    if (!initialData) {
+    // Only allow sorting if in data view and not displaying initialData
+    if (viewMode === 'data' && !initialData) {
       setSortConfig(current => {
         if (current.column !== columnName) {
           return { column: columnName, direction: 'desc' };
@@ -88,41 +90,86 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
 
   // Effect to read initial state from URL on mount
   useEffect(() => {
-    if (!initialData && typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const currentTableName = urlParams.get('table');
+      const viewFromUrl = urlParams.get('view');
       const pageFromUrl = urlParams.get('page');
       const itemsPerPageFromUrl = urlParams.get('itemsPerPage');
+      const sortColumnFromUrl = urlParams.get('sortColumn');
+      const sortDirectionFromUrl = urlParams.get('sortDirection');
 
       setTableName(currentTableName);
+      setViewMode(viewFromUrl === 'info' ? 'info' : 'data'); // Set view mode
 
-      // Set initial page and itemsPerPage from URL, defaulting if not present or invalid
-      const initialPage = pageFromUrl ? parseInt(pageFromUrl, 10) : 1;
-      const initialItemsPerPage = itemsPerPageFromUrl ? parseInt(itemsPerPageFromUrl, 10) : 10;
+      // Set initial page and itemsPerPage from URL, defaulting if not present or invalid (only for data view)
+      if (viewFromUrl !== 'info') {
+        const initialPage = pageFromUrl ? parseInt(pageFromUrl, 10) : 1;
+        const initialItemsPerPage = itemsPerPageFromUrl ? parseInt(itemsPerPageFromUrl, 10) : 10;
+        setCurrentPage(initialPage);
+        setItemsPerPage(initialItemsPerPage);
+      } else {
+         // Reset pagination for info view
+         setCurrentPage(1);
+         setItemsPerPage(10);
+      }
 
-      setCurrentPage(initialPage);
-      setItemsPerPage(initialItemsPerPage);
+
+      // Set initial sort config from URL (only for data view)
+      if (viewFromUrl !== 'info' && sortColumnFromUrl) {
+        setSortConfig({
+          column: sortColumnFromUrl,
+          direction: (sortDirectionFromUrl as 'asc' | 'desc') || 'asc', // Default to asc if direction is invalid or not present
+        });
+      } else {
+        // Reset sort config for info view
+        setSortConfig({ column: null, direction: null });
+      }
     }
   }, [initialData]); // This effect should only run on mount or when initialData changes
 
-  // Effect to update URL query parameters when page or itemsPerPage changes
+  // Effect to update URL query parameters when viewMode, page, itemsPerPage, or sortConfig changes
   useEffect(() => {
-    // Only update URL if not displaying initialData and on the client side
-    if (!initialData && typeof window !== 'undefined') {
+    // Only update URL on the client side
+    if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
 
-      // Update page parameter
-      if (currentPage !== 1) {
-        urlParams.set('page', currentPage.toString());
+      // Update view parameter
+      if (viewMode === 'info') {
+        urlParams.set('view', 'info');
       } else {
-        urlParams.delete('page');
+        urlParams.delete('view'); // Default is data, so remove parameter
       }
 
-      // Update itemsPerPage parameter
-      if (itemsPerPage !== 10) {
-        urlParams.set('itemsPerPage', itemsPerPage.toString());
+      // Update page and itemsPerPage parameters (only for data view)
+      if (viewMode === 'data') {
+        if (currentPage !== 1) {
+          urlParams.set('page', currentPage.toString());
+        } else {
+          urlParams.delete('page');
+        }
+
+        if (itemsPerPage !== 10) {
+          urlParams.set('itemsPerPage', itemsPerPage.toString());
+        } else {
+          urlParams.delete('itemsPerPage');
+        }
       } else {
-        urlParams.delete('itemsPerPage');
+         // Remove data-specific parameters in info view
+         urlParams.delete('page');
+         urlParams.delete('itemsPerPage');
+      }
+
+
+      // Update sort parameters (only for data view)
+      if (viewMode === 'data' && sortConfig.column) {
+        urlParams.set('sortColumn', sortConfig.column);
+        // Default to asc if direction is null
+        urlParams.set('sortDirection', sortConfig.direction || 'asc');
+      } else {
+        // Remove sort parameters in info view
+        urlParams.delete('sortColumn');
+        urlParams.delete('sortDirection');
       }
 
       // Construct the new URL
@@ -131,32 +178,51 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
       // Update the browser history without reloading the page
       window.history.replaceState({}, '', newUrl);
     }
-  }, [currentPage, itemsPerPage, initialData]);
+  }, [viewMode, currentPage, itemsPerPage, sortConfig, initialData]);
 
-  // Effect to fetch table data when tableName, currentPage, or itemsPerPage changes
+  // Effect to fetch data based on viewMode and tableName
   useEffect(() => {
-    // Only fetch table data if initialData is NOT provided and tableName is set
+    // Only fetch data if initialData is NOT provided and tableName is set
     if (!initialData && tableName) {
-      const fetchTableData = async () => {
+      const fetchData = async () => {
         try {
-          const response = await fetch(
-            `/api/db/table-data?table=${tableName}&page=${currentPage}&itemsPerPage=${itemsPerPage}`,
-            { credentials: 'include' }
-          );
+          let url;
+          if (viewMode === 'info') {
+            // Use the new table-schema endpoint for info view
+            url = new URL(`/api/db/table-schema`, window.location.origin);
+            url.searchParams.set('table', tableName);
+          } else { // viewMode === 'data'
+            url = new URL(`/api/db/table-data`, window.location.origin);
+            url.searchParams.set('table', tableName);
+            url.searchParams.set('page', currentPage.toString());
+            url.searchParams.set('itemsPerPage', itemsPerPage.toString());
+            if (sortConfig.column) {
+              url.searchParams.set('sortColumn', sortConfig.column);
+              url.searchParams.set('sortDirection', sortConfig.direction || 'asc');
+            }
+          }
+
+          const response = await fetch(url.toString(), { credentials: 'include' });
           const data = await response.json();
           if (response.ok) {
-            setTableData(data);
+            if (viewMode === 'info') {
+              setTableSchema(data);
+              setTableData(null); // Clear table data when viewing info
+            } else {
+              setTableData(data);
+              setTableSchema(null); // Clear schema data when viewing data
+            }
           } else {
-            console.error('Error fetching table data:', data.error || 'Unknown error');
+            console.error(`Error fetching ${viewMode} data:`, data.error || 'Unknown error');
             // Optionally set an error state here to display to the user
           }
         } catch (error) {
-          console.error('Error fetching table data:', error);
+          console.error(`Error fetching ${viewMode} data:`, error);
         }
       };
-      fetchTableData();
+      fetchData();
     }
-  }, [tableName, currentPage, itemsPerPage, initialData]); // Add currentPage and itemsPerPage to dependency array
+  }, [tableName, viewMode, currentPage, itemsPerPage, sortConfig, initialData]); // Add viewMode to dependencies
 
   const writeCell = ({ row, col }: { row: { [key: string]: any }, col: { name: string } }) => {
     const cellValue = row[col.name];
@@ -196,9 +262,9 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {dbInfo.rows.map((row, rowIndex) => (
-                    <tr key={rowIndex}>
+                    <tr key={rowIndex} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
                       {dbInfo.columns.map((col, i) => (
                         <td
                           className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white relative max-w-xs overflow-hidden text-ellipsis ${i == 0 && rowIndex == dbInfo.rows.length - 1 ? 'rounded-bl-lg' : ''} ${i == dbInfo.columns.length - 1 && rowIndex == dbInfo.rows.length - 1 ? 'rounded-br-lg' : ''}`}
@@ -222,16 +288,62 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
       }
     }
 
-    if (!tableData) {
+    // Loading state based on viewMode
+    if (viewMode === 'data' && !tableData) {
       return <p className="text-gray-600 dark:text-gray-400">Loading table data...</p>;
+    }
+    if (viewMode === 'info' && !tableSchema) {
+       return <p className="text-gray-600 dark:text-gray-400">Loading table schema...</p>;
     }
   }
 
+  // Render table data or schema based on viewMode
+  if (viewMode === 'info') {
+    if (!tableSchema || tableSchema.rows.length === 0) {
+      return <p className="text-gray-600 dark:text-gray-400">No schema information available for this table.</p>;
+    }
+    return (
+      <div className="overflow-x-auto">
+        <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Schema for table: {tableName}</h2>
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-700">
+            <tr>
+              {tableSchema.columns.map((col, i) => (
+                <th
+                  scope="col"
+                  className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${i == 0 ? 'rounded-tl-lg' : ''} ${i == tableSchema.columns.length - 1 ? 'rounded-tr-lg' : ''}`}
+                  key={col.name}
+                >
+                  {col.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            {tableSchema.rows.map((row, rowIndex) => (
+              <tr key={rowIndex} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                {tableSchema.columns.map((col, i) => (
+                  <td
+                    className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white relative max-w-xs overflow-hidden text-ellipsis ${i == 0 && rowIndex == tableSchema.rows.length - 1 ? 'rounded-bl-lg' : ''} ${i == tableSchema.columns.length - 1 && rowIndex == tableSchema.rows.length - 1 ? 'rounded-br-lg' : ''}`}
+                    key={col.name}
+                  >
+                    {writeCell({ row, col })}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // Render table data (original logic)
   return (
     <>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-700">
+        <thead className="bg-gray-50 dark:bg-gray-700 border-b-1 border-white dark:border-gray-800">
           <tr>
             {dataToDisplay?.columns?.map((col, i) => (
               <th
@@ -245,162 +357,162 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
                 <div className="flex items-center space-x-1">
                   <span>{col.name}</span>
                    {!initialData && ( // Only show sort icons if not displaying initialData
-                    <div className={`transition-opacity ${hoveredColumn === col.name || sortConfig.column === col.name ? 'opacity-100' : 'opacity-0'}`}>
-                      {sortConfig.column === col.name ? (
-                        sortConfig.direction === 'desc' ? (
-                          <ArrowDownIcon className="w-3 h-3" />
-                        ) : (
-                          <ArrowUpIcon className="w-3 h-3" />
-                        )
-                      ) : (
-                        <ArrowDownIcon className="w-3 h-3 text-gray-400" />
-                      )}
-                    </div>
+                     <div className={`transition-opacity ${hoveredColumn === col.name || sortConfig.column === col.name ? 'opacity-100' : 'opacity-0'}`}>
+                       {sortConfig.column === col.name ? (
+                         sortConfig.direction === 'desc' ? (
+                           <ArrowDownIcon className="w-3 h-3" />
+                         ) : (
+                           <ArrowUpIcon className="w-3 h-3" />
+                         )
+                       ) : (
+                         <ArrowDownIcon className="w-3 h-3 text-gray-400" />
+                       )}
+                     </div>
+                    )}
+                 </div>
+               </th>
+             ))}
+           </tr>
+         </thead>
+         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+           {(sortedData || dataToDisplay?.rows)?.map((row, rowIndex) => (
+             <tr key={rowIndex} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+               {dataToDisplay?.columns?.map((col, i) => (
+                 <td
+                   className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white relative max-w-xs overflow-hidden text-ellipsis ${i == 0 && rowIndex == dataToDisplay.rows.length - 1 ? 'rounded-bl-lg' : ''} ${i == dataToDisplay.columns.length - 1 && rowIndex == dataToDisplay.rows.length - 1 ? 'rounded-br-lg' : ''}`}
+                   key={col.name}
+                   // Disable editing if displaying initialData
+                   onDoubleClick={() => {
+                     if (!initialData) {
+                       const cellValue = row[col.name];
+                       const isBlob = (
+                         typeof cellValue === 'object' && cellValue !== null && cellValue.type === 'Buffer' && Array.isArray(cellValue.data)
+                       ) || cellValue === '[Blob Data]';
+
+                       if (!isBlob) { // Only allow editing if it's NOT a blob
+                         setEditingCell({
+                           rowIndex,
+                           columnName: col.name,
+                           originalValue: cellValue
+                         });
+                         setTempValue(cellValue); // Initialize tempValue with the cell's current value
+                       } else {
+                         // Optionally provide feedback that blob columns are not editable
+                         toast.info('Blob columns are not editable.');
+                       }
+                     }
+                   }}
+                 >
+                   {editingCell && editingCell.rowIndex === rowIndex && editingCell.columnName === col.name ? (
+                     <textarea
+                       className="w-full h-full p-0 border-0 focus:ring-0"
+                       value={tempValue}
+                       onChange={(e) => setTempValue(e.target.value)}
+                       onBlur={async () => {
+                         if (tempValue !== editingCell.originalValue) {
+                           // Optimistically update UI
+                           const originalTableData = JSON.parse(JSON.stringify(tableData)); // Deep copy for revert
+                           const updatedTableData = { ...tableData! }; // Assert tableData is not null
+                           updatedTableData.rows[rowIndex][col.name] = tempValue;
+                           setTableData(updatedTableData);
+
+                           try {
+                             const response = await fetch(`/api/db/update-table-data`, {
+                               method: 'POST',
+                               headers: { 'Content-Type': 'application/json' },
+                               body: JSON.stringify({
+                                 table: tableName,
+                                 rowIndex: editingCell.rowIndex, // Use editingCell's rowIndex
+                                 columnName: col.name,
+                                 newValue: tempValue
+                               }),
+                               credentials: 'include'
+                             });
+
+                             if (!response.ok) {
+                               const errorData = await response.json();
+                               console.error('Error updating table data:', errorData);
+                               toast.error(`Failed to update row: ${errorData.error || 'Unknown error'}`);
+                               // Revert the change in the UI
+                               setTableData(originalTableData);
+                             } else {
+                               toast.success('Row updated successfully!');
+                               // Update original value in editingCell state if needed,
+                               // though it's cleared right after anyway.
+                               // If we wanted to allow further edits without re-fetching,
+                               // we'd update the original value here.
+                             }
+                           } catch (error) {
+                             console.error('Error updating table data:', error);
+                             toast.error(`Failed to update row: ${error instanceof Error ? error.message : 'Network error'}`);
+                             // Revert the change in the UI
+                             setTableData(originalTableData);
+                           }
+                         }
+                         setEditingCell(null);
+                       }}
+                       autoFocus
+                     />
+                   ) : (
+                     writeCell({ row, col })
                    )}
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-          {(sortedData || dataToDisplay?.rows)?.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {dataToDisplay?.columns?.map((col, i) => (
-                <td
-                  className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white relative max-w-xs overflow-hidden text-ellipsis ${i == 0 && rowIndex == dataToDisplay.rows.length - 1 ? 'rounded-bl-lg' : ''} ${i == dataToDisplay.columns.length - 1 && rowIndex == dataToDisplay.rows.length - 1 ? 'rounded-br-lg' : ''}`}
-                  key={col.name}
-                  // Disable editing if displaying initialData
-                  onDoubleClick={() => {
-                    if (!initialData) {
-                      const cellValue = row[col.name];
-                      const isBlob = (
-                        typeof cellValue === 'object' && cellValue !== null && cellValue.type === 'Buffer' && Array.isArray(cellValue.data)
-                      ) || cellValue === '[Blob Data]';
-
-                      if (!isBlob) { // Only allow editing if it's NOT a blob
-                        setEditingCell({
-                          rowIndex,
-                          columnName: col.name,
-                          originalValue: cellValue
-                        });
-                        setTempValue(cellValue); // Initialize tempValue with the cell's current value
-                      } else {
-                        // Optionally provide feedback that blob columns are not editable
-                        toast.info('Blob columns are not editable.');
-                      }
-                    }
-                  }}
-                >
-                  {editingCell && editingCell.rowIndex === rowIndex && editingCell.columnName === col.name ? (
-                    <textarea
-                      className="w-full h-full p-0 border-0 focus:ring-0"
-                      value={tempValue}
-                      onChange={(e) => setTempValue(e.target.value)}
-                      onBlur={async () => {
-                        if (tempValue !== editingCell.originalValue) {
-                          // Optimistically update UI
-                          const originalTableData = JSON.parse(JSON.stringify(tableData)); // Deep copy for revert
-                          const updatedTableData = { ...tableData! }; // Assert tableData is not null
-                          updatedTableData.rows[rowIndex][col.name] = tempValue;
-                          setTableData(updatedTableData);
-
-                          try {
-                            const response = await fetch(`/api/db/update-table-data`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                table: tableName,
-                                rowIndex: editingCell.rowIndex, // Use editingCell's rowIndex
-                                columnName: col.name,
-                                newValue: tempValue
-                              }),
-                              credentials: 'include'
-                            });
-
-                            if (!response.ok) {
-                              const errorData = await response.json();
-                              console.error('Error updating table data:', errorData);
-                              toast.error(`Failed to update row: ${errorData.error || 'Unknown error'}`);
-                              // Revert the change in the UI
-                              setTableData(originalTableData);
-                            } else {
-                              toast.success('Row updated successfully!');
-                              // Update original value in editingCell state if needed,
-                              // though it's cleared right after anyway.
-                              // If we wanted to allow further edits without re-fetching,
-                              // we'd update the original value here.
-                            }
-                          } catch (error) {
-                            console.error('Error updating table data:', error);
-                            toast.error(`Failed to update row: ${error instanceof Error ? error.message : 'Network error'}`);
-                            // Revert the change in the UI
-                            setTableData(originalTableData);
-                          }
-                        }
-                        setEditingCell(null);
-                      }}
-                      autoFocus
-                    />
-                  ) : (
-                    writeCell({ row, col })
-                  )}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
-      {/* Pagination Controls */}
-      {!initialData && tableData?.pagination && ( // Only show pagination if not displaying initialData and pagination data exists
-        <div className="flex justify-between items-center mt-4 px-6">
-          <div className="flex items-center space-x-2">
-            <label htmlFor="itemsPerPage" className="text-sm text-gray-600 dark:text-gray-400">
-              Rows per page:
-            </label>
-            <Select
-              id="itemsPerPage"
-              value={itemsPerPage}
-              onChange={(e) => {
-                const newItemsPerPage = Number(e.target.value);
-                setItemsPerPage(newItemsPerPage);
-                setCurrentPage(1); // Reset to first page when changing items per page
-              }}
-              className="form-select text-sm !px-2 !py-1"
-            >
-              {[10, 25, 50, 100, -1].map((num) => (
-                <option key={num} value={num === -1 ? tableData.pagination.total : num}>
-                  {num === -1 ? 'All' : num}
-                </option>
-              ))}
-            </Select>
-            <span className="text-sm text-gray-600 dark:text-gray-400 ml-4">
-              Total: {tableData.pagination.total} rows
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-600"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              Page {tableData.pagination.page} of {tableData.pagination.totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage(prev =>
-                prev < tableData.pagination.totalPages ? prev + 1 : prev
-              )}
-              disabled={currentPage >= tableData.pagination.totalPages}
-              className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-600"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
+                 </td>
+               ))}
+             </tr>
+           ))}
+         </tbody>
+       </table>
+       </div>
+       {/* Pagination Controls */}
+       {!initialData && tableData?.pagination && ( // Only show pagination if not displaying initialData and pagination data exists
+         <div className="flex justify-between items-center mt-4 px-6">
+           <div className="flex items-center space-x-2">
+             <label htmlFor="itemsPerPage" className="text-sm text-gray-600 dark:text-gray-400">
+               Rows per page:
+             </label>
+             <Select
+               id="itemsPerPage"
+               value={itemsPerPage}
+               onChange={(e) => {
+                 const newItemsPerPage = Number(e.target.value);
+                 setItemsPerPage(newItemsPerPage);
+                 setCurrentPage(1); // Reset to first page when changing items per page
+               }}
+               className="form-select text-sm !px-2 !py-1"
+             >
+               {[10, 25, 50, 100, -1].map((num) => (
+                 <option key={num} value={num === -1 ? tableData.pagination.total : num}>
+                   {num === -1 ? 'All' : num}
+                 </option>
+               ))}
+             </Select>
+             <span className="text-sm text-gray-600 dark:text-gray-400 ml-4">
+               Total: {tableData.pagination.total} rows
+             </span>
+           </div>
+           <div className="flex items-center space-x-2">
+             <button
+               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+               disabled={currentPage === 1}
+               className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-600"
+             >
+               Previous
+             </button>
+             <span className="text-sm text-gray-600 dark:text-gray-400">
+               Page {tableData.pagination.page} of {tableData.pagination.totalPages}
+             </span>
+             <button
+               onClick={() => setCurrentPage(prev =>
+                 prev < tableData.pagination.totalPages ? prev + 1 : prev
+               )}
+               disabled={currentPage >= tableData.pagination.totalPages}
+               className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-600"
+             >
+               Next
+             </button>
+           </div>
+         </div>
+       )}
+     </>
+   );
+ }
