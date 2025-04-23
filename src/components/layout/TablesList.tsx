@@ -36,7 +36,7 @@ export default function TablesList() {
           <div className="flex items-center justify-between gap-2">
             <a
               href={`/admin?table=${table}&view=info`}
-              className={`cursor-pointer p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${table === currentTable && currentView === 'info' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}
+              className={`cursor-pointer p-2 ms-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${table === currentTable && currentView === 'info' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-500 dark:text-gray-400'}`}
               aria-label={`View info for table ${table}`}
             >
               <CubeIcon className="w-5 h-5" />

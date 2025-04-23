@@ -1,4 +1,6 @@
 import type { APIRoute } from 'astro';
+import sqlite3 from 'sqlite3';
+const { Database } = sqlite3;
 
 export const prerender = false; // Mark this route as server-rendered
 
@@ -21,21 +23,52 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     }
 
     if (username === expectedUser && password === expectedPassword) {
-      // --- Session Management ---
-      // Authentication successful. Store necessary info (like dbPath) securely.
-      // Using a simple cookie here for demonstration. Use a more robust session mechanism in production.
-      cookies.set('session', JSON.stringify({ loggedIn: true, dbPath: dbPath || '/sqlite/data.db' }), {
-        path: '/',
-        httpOnly: true,
-        secure: import.meta.env.PROD,
-        maxAge: 60 * 60 * 24,
-      });
+      // Authentication successful. Now, check database connection.
+      const databasePath = dbPath || '/sqlite/data.db';
+      let db: sqlite3.Database | null = null;
 
-      // Return success response (or redirect directly)
-      // Returning JSON allows the frontend to handle the redirect
-       return new Response(JSON.stringify({ success: true, message: 'Login successful.' }), { status: 200 });
-      // Alternatively, redirect server-side:
-      // return redirect('/admin', 302);
+      try {
+        db = await new Promise<sqlite3.Database>((resolve, reject) => {
+          const database = new Database(databasePath, (err) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(database);
+            }
+          });
+        });
+
+        // Close the connection immediately after successful open
+        db.close();
+        db = null; // Set db to null after closing
+
+        // --- Session Management ---
+        // Store necessary info (like dbPath) securely.
+        // Using a simple cookie here for demonstration. Use a more robust session mechanism in production.
+        cookies.set('session', JSON.stringify({ loggedIn: true, dbPath: databasePath }), {
+          path: '/',
+          httpOnly: true,
+          secure: import.meta.env.PROD,
+          maxAge: 60 * 60 * 24,
+        });
+
+        // Return success response
+        return new Response(JSON.stringify({ success: true, message: 'Login successful.' }), { status: 200 });
+
+      } catch (dbError) {
+        console.error('Database connection check failed:', dbError);
+        if ((dbError as any).code === 'SQLITE_CANTOPEN') {
+          return new Response(JSON.stringify({ success: false, message: 'Unable to open database file. Please check the path.' }), { status: 400 });
+        } else {
+          return new Response(JSON.stringify({ success: false, message: 'An error occurred while checking the database connection.' }), { status: 500 });
+        }
+      } finally {
+        // Ensure db connection is closed if it was opened and not already closed
+        if (db) {
+          db.close();
+        }
+      }
+
     } else {
       // Authentication failed
       return new Response(JSON.stringify({ success: false, message: 'Invalid username or password.' }), { status: 401 });

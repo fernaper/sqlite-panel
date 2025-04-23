@@ -304,7 +304,7 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
     }
     return (
       <div className="overflow-x-auto">
-        <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Schema for table: {tableName}</h2>
+        <h2 className="text-md mb-4 text-gray-800 dark:text-white">Schema for table: {tableName}</h2>
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>

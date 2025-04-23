@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import Card from '@/components/ui/Card.tsx';
 import TextInput from '@/components/ui/TextInput.tsx';
 import Button from '@/components/ui/Button.tsx';
 import Logo from '@/components/ui/Logo.tsx';
-import Loader from '@/components/ui/Loader.tsx'; // Import Loader
+import Loader from '@/components/ui/Loader.tsx';
 import { LockClosedIcon, UserIcon } from '@heroicons/react/24/solid';
 
 export default function LoginForm() {
@@ -50,11 +51,15 @@ export default function LoginForm() {
         window.location.href = '/admin'; // Redirect on success
       } else {
         console.error('Login failed:', result.message);
-        setError(result.message || 'Invalid credentials or server error.');
+        // Use toast for error notification
+        toast.error(result.message || 'Invalid credentials or server error.');
+        setError(result.message || 'Invalid credentials or server error.'); // Still set error for display below form
       }
     } catch (err) {
       console.error('Error submitting login form:', err);
-      setError('An error occurred during login. Please try again.');
+      // Use toast for error notification
+      toast.error('An error occurred during login. Please try again.');
+      setError('An error occurred during login. Please try again.'); // Still set error for display below form
     } finally {
       setIsLoading(false);
     }
@@ -99,9 +104,6 @@ export default function LoginForm() {
             disabled={isLoading}
           />
         </div>
-        {error && (
-          <p className="mt-4 text-sm text-red-600 dark:text-red-400 text-center">{error}</p>
-        )}
         <Button type="submit" className="w-full mt-6" disabled={isLoading}>
           {isLoading ? <Loader className="w-5 h-5 mx-auto" /> : 'Login'}
         </Button>

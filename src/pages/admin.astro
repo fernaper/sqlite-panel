@@ -6,6 +6,7 @@ import ThemeSwitcher from '@/components/ui/ThemeSwitcher';
 import LocaleSwitcher from '@/components/ui/LocaleSwitcher';
 import AdminContent from '@/components/layout/AdminContent.tsx';
 import Logo from '@/components/ui/Logo';
+import { Editor } from '@monaco-editor/react';
 
 export const prerender = false; // Mark this route as server-rendered
 
@@ -47,7 +48,7 @@ const dbPath = sessionCookie ? JSON.parse(sessionCookie.value).dbPath : '/sqlite
 
     <!-- Main Content -->
     <main class="flex-1 px-6 pb-6 overflow-auto">
-      <AdminContent client:load dbPath={dbPath} />
+      <AdminContent client:only="react" dbPath={dbPath} />
     </main>
   </div>
 

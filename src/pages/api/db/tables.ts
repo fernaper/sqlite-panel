@@ -25,7 +25,28 @@ export const GET: APIRoute = async ({ cookies, request }) => {
       return new Response(JSON.stringify({ error: 'Database path not found in session' }), { status: 500 });
     }
 
-    const db = new Database(dbPath);
+    let db: sqlite3.Database;
+    try {
+      db = await new Promise<sqlite3.Database>((resolve, reject) => {
+        const database = new Database(dbPath, (err) => {
+          if (err) {
+            if ((err as any).code === 'SQLITE_CANTOPEN') {
+              reject(new Error('Database file not found or inaccessible.'));
+            } else {
+              reject(err);
+            }
+          } else {
+            resolve(database);
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Error opening database:', error);
+      if (error instanceof Error && error.message === 'Database file not found or inaccessible.') {
+         return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+      }
+      return new Response(JSON.stringify({ error: 'Failed to open database' }), { status: 500 });
+    }
 
     const tables = await new Promise((resolve, reject) => {
       db.all("SELECT name FROM sqlite_master WHERE type='table'", (err, rows: { name: string }[]) => {

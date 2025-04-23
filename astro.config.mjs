@@ -16,6 +16,9 @@ export default defineConfig({
       alias: {
         '@': path.resolve('./src')
       }
-    }
+    },
+    ssr: {
+      noExternal: ['monaco-editor'],
+    },
   }
 });
