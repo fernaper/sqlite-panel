@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@astrojs/react": "^4.2.4",
+    "@google/generative-ai": "^0.24.0",
     "@heroicons/react": "^2.2.0",
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/vite": "^4.1.4",

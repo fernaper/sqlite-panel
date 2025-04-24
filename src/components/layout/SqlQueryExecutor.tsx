@@ -16,12 +16,18 @@ interface SqlQueryExecutorProps {
 
 export default function SqlQueryExecutor({ onQueryResult }: SqlQueryExecutorProps) {
   const [sqlQuery, setSqlQuery] = useState('');
+  const [markdownContent, setMarkdownContent] = useState('');
+  const [editorMode, setEditorMode] = useState<'sql' | 'markdown'>('sql');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentTheme, setCurrentTheme] = useState('light');
   const [tableNames, setTableNames] = useState<string[]>([]);
   const [columnNames, setColumnNames] = useState<string[]>([]);
   const monaco = useMonaco();
+
+  const toggleEditorMode = () => {
+    setEditorMode(prevMode => (prevMode === 'sql' ? 'markdown' : 'sql'));
+  };
 
   useEffect(() => {
     const updateTheme = () => {
@@ -212,26 +218,49 @@ export default function SqlQueryExecutor({ onQueryResult }: SqlQueryExecutorProp
     setError(null);
 
     try {
-      const response = await fetch('/api/db/execute-query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ sqlQuery }),
-        credentials: 'include',
-      });
+      if (editorMode === 'sql') {
+        const response = await fetch('/api/db/execute-query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sqlQuery }),
+          credentials: 'include',
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.ok) {
-        onQueryResult(data);
-      } else {
-        setError(data.error || 'An unknown error occurred.');
-        onQueryResult(null); // Clear previous results on error
+        if (response.ok) {
+          onQueryResult(data);
+        } else {
+          setError(data.error || 'An unknown error occurred.');
+          onQueryResult(null); // Clear previous results on error
+        }
+      } else { // editorMode === 'markdown'
+        const response = await fetch('/api/db/generate-query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prompt: markdownContent }),
+          credentials: 'include',
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setSqlQuery(data.query);
+          setEditorMode('sql');
+          setMarkdownContent('');
+          onQueryResult(null); // Clear previous results when generating a new query
+        } else {
+          setError(data.error || 'An unknown error occurred.');
+          onQueryResult(null); // Clear previous results on error
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'A network error occurred.');
-      console.error('Error executing query:', err);
+      console.error('Error handling submit:', err);
     } finally {
       setLoading(false);
     }
@@ -239,14 +268,29 @@ export default function SqlQueryExecutor({ onQueryResult }: SqlQueryExecutorProp
 
   return (
     <Card className="mb-6">
-      <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Execute SQL</h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Execute SQL</h3>
+        <button
+          type="button"
+          className="cursor-pointer text-sm text-blue-600 dark:text-blue-400 hover:underline focus:outline-none"
+          onClick={toggleEditorMode}
+        >
+          {editorMode === 'sql' ? '💡 Generate with AI' : '📦 Switch to SQL'}
+        </button>
+      </div>
       <form onSubmit={handleSubmit}>
         <div className="w-full h-30 bg-gray-200 dark:bg-gray-800" >
           <MonacoEditor
-            language="sql"
+            language={editorMode}
             theme="customTheme"
-            value={sqlQuery}
-            onChange={(value) => setSqlQuery(value || '')}
+            value={editorMode === 'sql' ? sqlQuery : markdownContent}
+            onChange={(value) => {
+              if (editorMode === 'sql') {
+                setSqlQuery(value || '');
+              } else {
+                setMarkdownContent(value || '');
+              }
+            }}
             options={{
               minimap: { enabled: false},
               wordWrap: 'on',
@@ -259,8 +303,12 @@ export default function SqlQueryExecutor({ onQueryResult }: SqlQueryExecutorProp
             }}
           />
         </div>
-        <Button type="submit" className="mt-3" disabled={loading}>
-          {loading ? 'Running...' : 'Run Query'}
+        <Button
+          type="submit"
+          className="mt-3"
+          disabled={loading || (editorMode === 'markdown' && markdownContent.trim() === '') || (editorMode === 'sql' && sqlQuery.trim() === '')}
+        >
+          {loading ? 'Running...' : (editorMode === 'sql' ? 'Run Query' : 'Generate Query')}
         </Button>
       </form>
 
