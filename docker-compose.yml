@@ -1,0 +1,25 @@
+services:
+
+  # Publicly accessible containers
+  app:
+    image: fernaperg/sqlite-panel:v1.0.0
+    build:
+      context: .
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      - GEMINI_MODEL=gemini-2.0-flash
+    env_file:
+      - ./envs/prod.env
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    expose:
+      - 80
+    healthcheck:
+      test: curl --fail -s http://localhost:80/ || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10

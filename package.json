@@ -9,6 +9,7 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/node": "^9.2.1",
     "@astrojs/react": "^4.2.4",
     "@google/generative-ai": "^0.24.0",
     "@heroicons/react": "^2.2.0",

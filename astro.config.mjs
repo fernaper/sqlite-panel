@@ -6,6 +6,8 @@ import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
+import node from '@astrojs/node';
+
 // https://astro.build/config
 export default defineConfig({
   integrations: [react()],
@@ -20,5 +22,11 @@ export default defineConfig({
     ssr: {
       noExternal: ['monaco-editor'],
     },
-  }
+  },
+
+  output: 'server',
+
+  adapter: node({
+    mode: 'standalone'
+  })
 });
