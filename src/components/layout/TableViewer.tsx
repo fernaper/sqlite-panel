@@ -247,7 +247,7 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
       if (dbInfo) {
         if (dbInfo.rows.length > 0) {
           return (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-700">
                   <tr>
@@ -303,7 +303,7 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
       return <p className="text-gray-600 dark:text-gray-400">No schema information available for this table.</p>;
     }
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-lg">
         <h2 className="text-md mb-4 text-gray-800 dark:text-white">Schema for table: {tableName}</h2>
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-700">
@@ -341,7 +341,7 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
   // Render table data (original logic)
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-lg">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-700 border-b-1 border-white dark:border-gray-800">
           <tr>
