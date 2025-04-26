@@ -55,6 +55,29 @@ The backend logic for interacting with the SQLite database is handled directly w
 
 This project is designed to be deployed using Docker and Docker Compose.
 
+You have two options, downloading directly from docker hub or building the image yourself.
+
+#### Option 1: Pull from Docker Hub
+
+1.  **Pull the Docker image:**
+    ```bash
+    docker pull fernaper/sqlite-panel
+    ```
+
+2.  **Set up production environment variables:**
+    Ensure your `envs/prod.env` file is correctly configured with production settings.
+
+3.  **Run with Docker Compose:**
+    ```bash
+    docker-compose up -d
+    ```
+    This will start the application container.
+    Take into account that you will need to change the volume path in the `docker-compose.yml` file to point to your SQLite database file. The default path is set to `./data`, but you should change it to the actual path of your SQLite database file.
+
+#### Option 2: Build the Docker image yourself
+
+If you prefer to build the Docker image yourself, follow these steps:
+
 1.  **Build the Docker image:**
     ```bash
     docker build -t sqlite-panel .
