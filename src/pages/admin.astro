@@ -6,17 +6,17 @@ import ThemeSwitcher from '@/components/ui/ThemeSwitcher';
 import LocaleSwitcher from '@/components/ui/LocaleSwitcher';
 import AdminContent from '@/components/layout/AdminContent.tsx';
 import Logo from '@/components/ui/Logo';
-import { Editor } from '@monaco-editor/react';
 
 export const prerender = false; // Mark this route as server-rendered
 
-const sessionCookie = Astro.cookies.get('session');
+const sessionCookie = Astro.cookies.get('sqlite-panel-session');
 // console.log('Session cookie in admin.astro:', sessionCookie);
 const dbPath = sessionCookie ? JSON.parse(sessionCookie.value).dbPath : '/sqlite/data.db';
+const fileName = dbPath.split('/').pop() || 'data.db';
 // console.log('dbPath in admin.astro:', dbPath);
 ---
  
-<BaseLayout title="SQLite Panel">
+<BaseLayout title={`${fileName} - SQLite Panel`}>
   <div class="flex h-screen bg-gray-100 dark:bg-gray-900">
     <!-- Sidebar -->
     <aside class="w-64 bg-white dark:bg-gray-800 p-4 border-r border-gray-200 dark:border-gray-700 flex flex-col min-h-[450px]">

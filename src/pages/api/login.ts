@@ -45,7 +45,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         // --- Session Management ---
         // Store necessary info (like dbPath) securely.
         // Using a simple cookie here for demonstration. Use a more robust session mechanism in production.
-        cookies.set('session', JSON.stringify({ loggedIn: true, dbPath: databasePath }), {
+        cookies.set('sqlite-panel-session', JSON.stringify({ loggedIn: true, dbPath: databasePath }), {
           path: '/',
           httpOnly: true,
           secure: import.meta.env.PROD,

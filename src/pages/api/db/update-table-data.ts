@@ -6,7 +6,7 @@ export const prerender = false;
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   try {
-    const session = cookies.get('session');
+    const session = cookies.get('sqlite-panel-session');
     if (!session) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     }

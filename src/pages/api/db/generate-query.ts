@@ -68,7 +68,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     });
   }
 
-  const session = cookies.get('session');
+  const session = cookies.get('sqlite-panel-session');
   if (!session) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }

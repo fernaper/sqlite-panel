@@ -6,7 +6,7 @@ export const prerender = false; // Mark this route as server-rendered
 
 export const GET: APIRoute = async ({ cookies, request }) => {
   try {
-    const session = cookies.get('session');
+    const session = cookies.get('sqlite-panel-session');
     console.log('Session cookie:', session);
     if (!session) {
       console.log('No session cookie found');
