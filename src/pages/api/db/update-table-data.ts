@@ -91,6 +91,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return new Response(JSON.stringify({ message: 'Data updated successfully' }), { status: 200 });
   } catch (error) {
     console.error('Error updating table data:', error);
-    return new Response(JSON.stringify({ error: 'Failed to update data' }), { status: 500 });
+    // Include the actual error message in the response
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return new Response(JSON.stringify({ error: `Failed to update data: ${errorMessage}` }), { status: 500 });
   }
 };

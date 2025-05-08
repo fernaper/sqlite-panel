@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownIcon, ArrowUpIcon } from '@heroicons/react/24/solid';
+import { ArrowDownIcon, ArrowUpIcon, XMarkIcon } from '@heroicons/react/24/solid';
 import Select from '@/components/ui/Select';
+import TextInput from '@/components/ui/TextInput';
+import Button from '@/components/ui/Button';
+import TextAreaInput from '@/components/ui/TextAreaInput';
 
 interface QueryResult {
-  columns: { name: string }[];
+  columns: { name: string, type: string }[];
   rows: { [key: string]: any }[];
 }
 
@@ -17,7 +20,7 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
   const [tableName, setTableName] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'data' | 'info'>('data'); // 'data' or 'info'
   const [tableData, setTableData] = useState<{
-    columns: { name: string }[];
+    columns: { name: string, type: string }[];
     rows: { [key: string]: any }[];
     pagination: {
       total: number;
@@ -72,6 +75,13 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
       return sortConfig.direction === 'asc' ? comparison : -comparison;
     });
   }, [dataToDisplay?.rows, sortConfig, viewMode]);
+
+  const columnToType = useMemo(() => {
+    if (viewMode !== 'data') return null;
+    const data = dataToDisplay?.columns?.map(col => [col.name, col.type])
+    if (!data) return null;
+    return Object.fromEntries(data)
+  }, [viewMode, dataToDisplay]);
 
   const handleSort = (columnName: string) => {
     // Only allow sorting if in data view and not displaying initialData
@@ -210,7 +220,8 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
               setTableData(null); // Clear table data when viewing info
             } else {
               setTableData(data);
-              setTableSchema(null); // Clear schema data when viewing data
+              // Keep schema data when viewing data to determine column types for editing
+              // setTableSchema(null);
             }
           } else {
             console.error(`Error fetching ${viewMode} data:`, data.error || 'Unknown error');
@@ -375,91 +386,130 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
            </tr>
          </thead>
          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-           {(sortedData || dataToDisplay?.rows)?.map((row, rowIndex) => (
-             <tr key={rowIndex} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
-               {dataToDisplay?.columns?.map((col, i) => (
-                 <td
-                   className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white relative max-w-xs overflow-hidden text-ellipsis ${i == 0 && rowIndex == dataToDisplay.rows.length - 1 ? 'rounded-bl-lg' : ''} ${i == dataToDisplay.columns.length - 1 && rowIndex == dataToDisplay.rows.length - 1 ? 'rounded-br-lg' : ''}`}
-                   key={col.name}
-                   // Disable editing if displaying initialData
-                   onDoubleClick={() => {
-                     if (!initialData) {
-                       const cellValue = row[col.name];
-                       const isBlob = (
-                         typeof cellValue === 'object' && cellValue !== null && cellValue.type === 'Buffer' && Array.isArray(cellValue.data)
-                       ) || cellValue === '[Blob Data]';
+          {(sortedData || dataToDisplay?.rows)?.map((row, rowIndex) => (
+            <tr key={rowIndex} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+              {dataToDisplay?.columns?.map((col, i) => (
+                <td
+                  className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white relative max-w-xs overflow-hidden text-ellipsis ${i == 0 && rowIndex == dataToDisplay.rows.length - 1 ? 'rounded-bl-lg' : ''} ${i == dataToDisplay.columns.length - 1 && rowIndex == dataToDisplay.rows.length - 1 ? 'rounded-br-lg' : ''}`}
+                  key={col.name}
+                  // Disable editing if displaying initialData
+                  onDoubleClick={() => {
+                    if (!initialData) {
+                      const cellValue = row[col.name];
+                      const isBlob = (
+                        typeof cellValue === 'object' && cellValue !== null && cellValue.type === 'Buffer' && Array.isArray(cellValue.data)
+                      ) || cellValue === '[Blob Data]';
 
-                       if (!isBlob) { // Only allow editing if it's NOT a blob
-                         setEditingCell({
-                           rowIndex,
-                           columnName: col.name,
-                           originalValue: cellValue
-                         });
-                         setTempValue(cellValue); // Initialize tempValue with the cell's current value
-                       } else {
-                         // Optionally provide feedback that blob columns are not editable
-                         toast.info('Blob columns are not editable.');
-                       }
-                     }
-                   }}
-                 >
-                   {editingCell && editingCell.rowIndex === rowIndex && editingCell.columnName === col.name ? (
-                     <textarea
-                       className="w-full h-full p-0 border-0 focus:ring-0"
-                       value={tempValue}
-                       onChange={(e) => setTempValue(e.target.value)}
-                       onBlur={async () => {
-                         if (tempValue !== editingCell.originalValue) {
-                           // Optimistically update UI
-                           const originalTableData = JSON.parse(JSON.stringify(tableData)); // Deep copy for revert
-                           const updatedTableData = { ...tableData! }; // Assert tableData is not null
-                           updatedTableData.rows[rowIndex][col.name] = tempValue;
-                           setTableData(updatedTableData);
+                      if (!isBlob) { // Only allow editing if it's NOT a blob
+                        setEditingCell({
+                          rowIndex,
+                          columnName: col.name,
+                          originalValue: cellValue
+                        });
+                        setTempValue(cellValue); // Initialize tempValue with the cell's current value
+                      } else {
+                        // Optionally provide feedback that blob columns are not editable
+                        toast.info('Blob columns are not editable.');
+                      }
+                    }
+                  }}
+                >
+                  {editingCell && editingCell.rowIndex === rowIndex && editingCell.columnName === col.name ? (
+                    (() => {
+                      const columnType = columnToType?.[col.name] || 'TEXT'; // Default to TEXT if type is not found
+                      const isNumber = columnType === 'INTEGER' || columnType === 'REAL';
+                      const InputComponent = isNumber ? TextInput : TextAreaInput;
+                      const inputType = isNumber ? 'number' : 'text'; // Use 'text' for TextAreaInput
 
-                           try {
-                             const response = await fetch(`/api/db/update-table-data`, {
-                               method: 'POST',
-                               headers: { 'Content-Type': 'application/json' },
-                               body: JSON.stringify({
-                                 table: tableName,
-                                 rowIndex: editingCell.rowIndex, // Use editingCell's rowIndex
-                                 columnName: col.name,
-                                 newValue: tempValue
-                               }),
-                               credentials: 'include'
-                             });
+                      return (
+                        <div className="flex items-center w-full h-full">
+                          <InputComponent
+                            className="w-full h-full p-0 border-0 focus:ring-0 min-w-16"
+                            value={tempValue}
+                            onChange={(e) => setTempValue(e.target.value)}
+                            onBlur={async (e) => {
+                              // Check if the blur is caused by clicking the cancel button
+                              const relatedTarget = e.relatedTarget as HTMLElement | null;
+                              if (relatedTarget && relatedTarget.closest('.cancel-edit-button')) {
+                                setEditingCell(null); // Exit editing mode
+                                // No need to revert tempValue here, as it's not used after cancelling
+                                return; // Do not proceed with update
+                              }
 
-                             if (!response.ok) {
-                               const errorData = await response.json();
-                               console.error('Error updating table data:', errorData);
-                               toast.error(`Failed to update row: ${errorData.error || 'Unknown error'}`);
-                               // Revert the change in the UI
-                               setTableData(originalTableData);
-                             } else {
-                               toast.success('Row updated successfully!');
-                               // Update original value in editingCell state if needed,
-                               // though it's cleared right after anyway.
-                               // If we wanted to allow further edits without re-fetching,
-                               // we'd update the original value here.
-                             }
-                           } catch (error) {
-                             console.error('Error updating table data:', error);
-                             toast.error(`Failed to update row: ${error instanceof Error ? error.message : 'Network error'}`);
-                             // Revert the change in the UI
-                             setTableData(originalTableData);
-                           }
-                         }
-                         setEditingCell(null);
-                       }}
-                       autoFocus
-                     />
-                   ) : (
-                     writeCell({ row, col })
-                   )}
+                              if (tempValue !== editingCell.originalValue) {
+                                // Optimistically update UI
+                                const originalTableData = JSON.parse(JSON.stringify(tableData)); // Deep copy for revert
+                                const updatedTableData = { ...tableData! }; // Assert tableData is not null
+                                updatedTableData.rows[rowIndex][col.name] = tempValue;
+                                setTableData(updatedTableData);
+
+                                try {
+                                  const response = await fetch(`/api/db/update-table-data`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      table: tableName,
+                                      rowIndex: editingCell.rowIndex, // Use editingCell's rowIndex
+                                      columnName: col.name,
+                                      newValue: isNumber ? (tempValue === '' ? null : Number(tempValue)) : tempValue // Convert to number or null if number type
+                                    }),
+                                    credentials: 'include'
+                                  });
+
+                                  if (!response.ok) {
+                                    const errorData = await response.json();
+                                    console.error('Error updating table data:', errorData);
+                                    // Attempt to display a more detailed error message
+                                    const errorMessage = errorData.error
+                                      ? typeof errorData.error === 'string'
+                                        ? errorData.error
+                                        : JSON.stringify(errorData.error) // Stringify if it's an object
+                                      : 'Unknown error';
+                                    toast.error(`Failed to update row: ${errorMessage}`);
+                                    // Revert the change in the UI
+                                    setTableData(originalTableData);
+                                  } else {
+                                    toast.success('Row updated successfully!');
+                                    // Update original value in editingCell state if needed,
+                                    // though it's cleared right after anyway.
+                                    // If we wanted to allow further edits without re-fetching,
+                                    // we'd update the original value here.
+                                  }
+                                } catch (error) {
+                                  console.error('Error updating table data:', error);
+                                  // Attempt to display a more detailed error message for catch block
+                                  const errorMessage = error instanceof Error ? error.message : 'Network error';
+                                  toast.error(`Failed to update row: ${errorMessage}`);
+                                  // Revert the change in the UI
+                                  setTableData(originalTableData);
+                                }
+                              }
+                              setEditingCell(null); // Exit editing mode after update attempt
+                            }}
+                            autoFocus
+                            type={inputType} // Apply input type for TextInput
+                          />
+                          <Button
+                            variant="none"
+                            className="p-1 ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 cancel-edit-button" // Add a class for identification
+                            onClick={() => {
+                              setEditingCell(null); // Cancel editing
+                              setTempValue(editingCell.originalValue); // Revert temp value
+                            }}
+                            aria-label="Cancel editing"
+                          >
+                            <XMarkIcon className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      );
+                    })()) : (
+                      writeCell({ row, col })
+                    )
+                  }
                  </td>
                ))}
-             </tr>
-           ))}
+            </tr>
+          ))}
          </tbody>
        </table>
        </div>
