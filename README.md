@@ -99,6 +99,14 @@ If you prefer to build the Docker image yourself, follow these steps:
 
 This application includes an optional feature to generate SQL queries from natural language input, powered by Google Gemini. To enable this, you will need to configure the necessary API keys in your environment variables.
 
+## Future Improvements
+
+- **Export/Import functionality:** The ability to export and import SQLite databases or tables in various formats (e.g. SQL, CSV, etc.) is planned for future releases.
+- **Tool to create new SQLite tables:** A user-friendly interface for creating new SQLite tables directly from the web interface is also on the roadmap.
+- **Support to launch the system with non-existing SQLite file:** The ability to create new SQLite file on the fly, allowing users to start fresh databases without needing to pre-create them.
+- **Actual support for multi-language:** Currently, the application is only available in English. Future versions will include support for multiple languages to cater to a wider audience.
+- **Support for other databases:** While this project is focused on SQLite, there are plans to extend support to other databases like MySQL and PostgreSQL in the future.
+
 ## Contributing
 
 Contributions are welcome! If you'd like to contribute, please fork the repository and submit a pull request. We are especially interested in contributions that add support for integrating with other Large Language Models (LLMs) for the natural language query generation feature.
