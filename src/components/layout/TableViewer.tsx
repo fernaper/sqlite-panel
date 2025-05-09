@@ -5,9 +5,10 @@ import Select from '@/components/ui/Select';
 import TextInput from '@/components/ui/TextInput';
 import Button from '@/components/ui/Button';
 import TextAreaInput from '@/components/ui/TextAreaInput';
+import Popover from '@/components/ui/Popover';
 
 interface QueryResult {
-  columns: { name: string, type: string }[];
+  columns: { name: string, type?: string, notnull?: number }[];
   rows: { [key: string]: any }[];
 }
 
@@ -20,7 +21,7 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
   const [tableName, setTableName] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'data' | 'info'>('data'); // 'data' or 'info'
   const [tableData, setTableData] = useState<{
-    columns: { name: string, type: string }[];
+    columns: { name: string, type?: string, notnull?: number }[];
     rows: { [key: string]: any }[];
     pagination: {
       total: number;
@@ -35,7 +36,9 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
     columnName: string;
     originalValue: any;
   } | null>(null);
-  const [tempValue, setTempValue] = useState('');
+  const [tempValue, setTempValue] = useState<
+    string | number | null
+  >('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState<{
@@ -83,6 +86,13 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
     return Object.fromEntries(data)
   }, [viewMode, dataToDisplay]);
 
+  const columnCanBeNull = useMemo(() => {
+    if (viewMode !== 'data') return null;
+    const data = dataToDisplay?.columns?.map(col => [col.name, col.notnull ? false : true])
+    if (!data) return null;
+    return Object.fromEntries(data)
+  }, [viewMode, dataToDisplay]);
+
   const handleSort = (columnName: string) => {
     // Only allow sorting if in data view and not displaying initialData
     if (viewMode === 'data' && !initialData) {
@@ -123,7 +133,6 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
          setCurrentPage(1);
          setItemsPerPage(10);
       }
-
 
       // Set initial sort config from URL (only for data view)
       if (viewFromUrl !== 'info' && sortColumnFromUrl) {
@@ -169,7 +178,6 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
          urlParams.delete('page');
          urlParams.delete('itemsPerPage');
       }
-
 
       // Update sort parameters (only for data view)
       if (viewMode === 'data' && sortConfig.column) {
@@ -241,7 +249,7 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
       return '[Blob Data]';
     }
     if (cellValue === null || cellValue === undefined) {
-      return 'NULL';
+      return null;
     }
     const stringValue = String(cellValue);
     return stringValue.length > 1000 ? stringValue.substring(0, 1000) + '...' : stringValue;
@@ -400,15 +408,14 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
                         typeof cellValue === 'object' && cellValue !== null && cellValue.type === 'Buffer' && Array.isArray(cellValue.data)
                       ) || cellValue === '[Blob Data]';
 
-                      if (!isBlob) { // Only allow editing if it's NOT a blob
+                      if (!isBlob) {
                         setEditingCell({
                           rowIndex,
                           columnName: col.name,
                           originalValue: cellValue
                         });
-                        setTempValue(cellValue); // Initialize tempValue with the cell's current value
+                        setTempValue(cellValue);
                       } else {
-                        // Optionally provide feedback that blob columns are not editable
                         toast.info('Blob columns are not editable.');
                       }
                     }
@@ -425,16 +432,16 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
                         <div className="flex items-center w-full h-full">
                           <InputComponent
                             className="w-full h-full p-0 border-0 focus:ring-0 min-w-16"
-                            value={tempValue}
+                            value={tempValue ?? ''}
                             onChange={(e) => setTempValue(e.target.value)}
                             onBlur={async (e) => {
-                              // Check if the blur is caused by clicking the cancel button
+                              // Check if the blur is caused by clicking the cancel button or NULL button
                               const relatedTarget = e.relatedTarget as HTMLElement | null;
-                              if (relatedTarget && relatedTarget.closest('.cancel-edit-button')) {
-                                setEditingCell(null); // Exit editing mode
-                                // No need to revert tempValue here, as it's not used after cancelling
-                                return; // Do not proceed with update
+                              if (relatedTarget && (relatedTarget.closest('.cancel-edit-button') || relatedTarget.closest('.null-edit-button'))) {
+                                return; // Do not exit editing mode if clicking on NULL or Cancel button
                               }
+
+                              setEditingCell(null); // Exit editing mode
 
                               if (tempValue !== editingCell.originalValue) {
                                 // Optimistically update UI
@@ -489,17 +496,90 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
                             autoFocus
                             type={inputType} // Apply input type for TextInput
                           />
-                          <Button
-                            variant="none"
-                            className="p-1 ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 cancel-edit-button" // Add a class for identification
-                            onClick={() => {
-                              setEditingCell(null); // Cancel editing
-                              setTempValue(editingCell.originalValue); // Revert temp value
-                            }}
-                            aria-label="Cancel editing"
+                          {columnCanBeNull?.[editingCell.columnName] && (
+                            <Popover
+                              element={
+                                <Button
+                                  variant="none"
+                                  className="p-1 ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 null-edit-button"
+                                  aria-label="Set to NULL"
+                                  onClick={() => {
+                                    setTempValue(null);
+                                    // Update the cell value to NULL and exit editing mode
+                                    const originalTableData = JSON.parse(JSON.stringify(tableData));
+                                    const updatedTableData = { ...tableData! };
+                                    updatedTableData.rows[editingCell.rowIndex][editingCell.columnName] = null;
+                                    setTableData(updatedTableData);
+
+                                    // Call the API to update the table data
+                                    fetch(`/api/db/update-table-data`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        table: tableName,
+                                        rowIndex: editingCell.rowIndex,
+                                        columnName: editingCell.columnName,
+                                        newValue: null
+                                      }),
+                                      credentials: 'include'
+                                    })
+                                    .then(response => {
+                                      if (!response.ok) {
+                                        // Revert the change in the UI if the update fails
+                                        setTableData(originalTableData);
+                                        response.json().then(errorData => {
+                                          const errorMessage = errorData.error
+                                            ? typeof errorData.error === 'string'
+                                              ? errorData.error
+                                              : JSON.stringify(errorData.error)
+                                            : 'Unknown error';
+                                          toast.error(`Failed to update row: ${errorMessage}`);
+                                        });
+                                      } else {
+                                        toast.success('Row updated successfully!');
+                                      }
+                                    })
+                                    .catch(error => {
+                                      // Revert the change in the UI if there's a network error
+                                      setTableData(originalTableData);
+                                      const errorMessage = error instanceof Error ? error.message : 'Network error';
+                                      toast.error(`Failed to update row: ${errorMessage}`);
+                                    })
+                                    .finally(() => {
+                                      setEditingCell(null); // Exit editing mode
+                                    });
+                                  }}
+                                >
+                                  NULL
+                                </Button>
+                              }
+                              position='left'
+                              className='-mt-4'
+                              defaultWidth='min-w-10'
+                            >
+                              <span>Set cell value to NULL</span>
+                            </Popover>
+                          )}
+                          <Popover
+                            element={
+                              <Button
+                                variant="none"
+                                className="p-1 ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 cancel-edit-button"
+                                aria-label="Cancel editing"
+                                onClick={() => {
+                                  setEditingCell(null); 
+                                  setTempValue(editingCell.originalValue); 
+                                }}
+                              >
+                                <XMarkIcon className="w-4 h-4" />
+                              </Button>
+                            }
+                            position='left'
+                            className='-mt-4'
+                            defaultWidth='min-w-10'
                           >
-                            <XMarkIcon className="w-4 h-4" />
-                          </Button>
+                            <span>Cancel editing</span>
+                          </Popover>
                         </div>
                       );
                     })()) : (
@@ -565,4 +645,4 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
        )}
      </>
    );
- }
+}
