@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { ArrowDownIcon, ArrowUpIcon, XMarkIcon } from '@heroicons/react/24/solid';
+import { ArrowDownIcon, ArrowUpIcon, XMarkIcon, ArrowDownTrayIcon } from '@heroicons/react/24/solid';
 import Select from '@/components/ui/Select';
 import TextInput from '@/components/ui/TextInput';
 import Button from '@/components/ui/Button';
@@ -46,6 +46,11 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
     direction: 'asc' | 'desc' | null;
   }>({ column: null, direction: null });
   const [hoveredColumn, setHoveredColumn] = useState<string | null>(null);
+
+  const [blobCellControls, setBlobCellControls] = useState<{
+    rowIndex: number;
+    columnName: string;
+  } | null>(null);
 
   // Determine which data to display based on viewMode
   const dataToDisplay = viewMode === 'data' ? (initialData || tableData) : tableSchema;
@@ -245,7 +250,7 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
 
   const writeCell = ({ row, col }: { row: { [key: string]: any }, col: { name: string } }) => {
     const cellValue = row[col.name];
-    if (typeof cellValue === 'object' && cellValue !== null && cellValue.type === 'Buffer' && Array.isArray(cellValue.data)) {
+    if (typeof cellValue === 'object' && cellValue !== null && cellValue.type === 'Buffer' && (Array.isArray(cellValue.data) || cellValue.data instanceof ArrayBuffer)) {
       return '[Blob Data]';
     }
     if (cellValue === null || cellValue === undefined) {
@@ -254,6 +259,54 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
     const stringValue = String(cellValue);
     return stringValue.length > 1000 ? stringValue.substring(0, 1000) + '...' : stringValue;
   }
+  
+  const isBlobCell = (cellValue: any) => {
+    return (
+      typeof cellValue === 'object' && cellValue !== null && cellValue.type === 'Buffer' && (Array.isArray(cellValue.data) || cellValue.data instanceof ArrayBuffer)
+    ) || cellValue === '[Blob Data]';
+  };
+
+  const handleDownloadBlob = (rowIndex: number, columnName: string) => {
+    const url = new URL(`/api/db/blob-data`, window.location.origin);
+    url.searchParams.set('table', tableName!);
+    url.searchParams.set('rowIndex', rowIndex.toString());
+    url.searchParams.set('columnName', columnName);
+    window.open(url.toString(), '_blank');
+  };
+  
+  // Accept rowIndex as parameter
+  const handleBlobUpdate = async (rowIndex: number, columnName: string, file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('table', tableName!);
+      formData.append('rowIndex', rowIndex.toString());
+      formData.append('columnName', columnName);
+  
+      const response = await fetch(`/api/db/update-blob-data`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        toast.error(`Failed to update blob: ${errorData.error}`);
+      } else {
+        toast.success('Blob updated successfully!');
+        // Update the table data optimistically
+        const updatedTableData = { ...tableData! };
+        updatedTableData.rows[rowIndex][columnName] = {
+          type: 'Buffer',
+          data: await file.arrayBuffer()
+        };
+        setTableData(updatedTableData);
+      }
+    } catch (error) {
+      console.error('Error updating blob data:', error);
+      toast.error('Failed to update blob');
+    }
+  };
 
   // If initialData is provided, use it directly and skip table name check
   if (initialData) {
@@ -404,19 +457,16 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
                   onDoubleClick={() => {
                     if (!initialData) {
                       const cellValue = row[col.name];
-                      const isBlob = (
-                        typeof cellValue === 'object' && cellValue !== null && cellValue.type === 'Buffer' && Array.isArray(cellValue.data)
-                      ) || cellValue === '[Blob Data]';
-
-                      if (!isBlob) {
+                      // Assuming row.rowid contains the unique identifier
+                      if (isBlobCell(cellValue)) {
+                        setBlobCellControls({ rowIndex, columnName: col.name });
+                      } else {
                         setEditingCell({
                           rowIndex,
                           columnName: col.name,
                           originalValue: cellValue
                         });
                         setTempValue(cellValue);
-                      } else {
-                        toast.info('Blob columns are not editable.');
                       }
                     }
                   }}
@@ -567,8 +617,8 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
                                 className="p-1 ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 cancel-edit-button"
                                 aria-label="Cancel editing"
                                 onClick={() => {
-                                  setEditingCell(null); 
-                                  setTempValue(editingCell.originalValue); 
+                                  setEditingCell(null);
+                                  setTempValue(editingCell.originalValue);
                                 }}
                               >
                                 <XMarkIcon className="w-4 h-4" />
@@ -582,7 +632,79 @@ export default function TableViewer({ initialData, dbInfo }: TableViewerProps) {
                           </Popover>
                         </div>
                       );
-                    })()) : (
+                    })()) : blobCellControls && blobCellControls.rowIndex === rowIndex && blobCellControls.columnName === col.name ? (
+                      // Render blob controls
+                      <div className="flex items-center space-x-2 w-full h-full">
+                        {/* Download Icon */}
+                        <Button
+                          variant="none"
+                          className="p-1 rounded-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                          onClick={() => handleDownloadBlob(rowIndex, col.name)}
+                          aria-label="Download Blob"
+                        >
+                          <ArrowDownTrayIcon className="w-4 h-4" />
+                        </Button>
+
+                        {/* Upload Area/Input */}
+                        <div
+                          className="py-4 px-2 flex-1 border rounded-lg border-dashed border-gray-300 dark:border-gray-600 p-1 text-center text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:border-gray-500 dark:hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-300"
+                          onDragOver={(e) => e.preventDefault()} // Prevent default to allow drop
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const file = e.dataTransfer.files?.[0];
+                            if (file) {
+                              // Pass rowIndex and columnName from blobCellControls
+                              handleBlobUpdate(blobCellControls!.rowIndex, blobCellControls!.columnName, file);
+                              setBlobCellControls(null); // Close controls after upload attempt
+                            }
+                          }}
+                          onClick={() => {
+                            // Trigger hidden file input click
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.onchange = (e) => {
+                              const file = (e.target as HTMLInputElement).files?.[0];
+                              if (file) {
+                                // Pass rowIndex and columnName from blobCellControls
+                                handleBlobUpdate(blobCellControls!.rowIndex, blobCellControls!.columnName, file);
+                                setBlobCellControls(null); // Close controls after upload attempt
+                              }
+                            };
+                            input.click();
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault(); // Previene scroll en caso de espacio
+                              // Trigger hidden file input click
+                              const input = document.createElement('input');
+                              input.type = 'file';
+                              input.onchange = (e) => {
+                                const file = (e.target as HTMLInputElement).files?.[0];
+                                if (file) {
+                                  // Pass rowIndex and columnName from blobCellControls
+                                  handleBlobUpdate(blobCellControls!.rowIndex, blobCellControls!.columnName, file);
+                                  setBlobCellControls(null); // Close controls after upload attempt
+                                }
+                              };
+                              input.click();
+                            }
+                          }}
+                          tabIndex={0}
+                        >
+                          Drag & Drop or Click to Upload
+                        </div>
+
+                        {/* Close button */}
+                        <Button
+                          variant="none"
+                          className="p-1 rounded-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                          onClick={() => setBlobCellControls(null)}
+                          aria-label="Close Blob Controls"
+                        >
+                          <XMarkIcon className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
                       writeCell({ row, col })
                     )
                   }
