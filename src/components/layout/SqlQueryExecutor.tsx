@@ -61,7 +61,7 @@ export default function SqlQueryExecutor({ onQueryResult }: SqlQueryExecutorProp
             const schemaResponse = await fetch(`/api/db/table-schema?tableName=${table}`);
             const schemaData = await schemaResponse.json();
             if (schemaResponse.ok) {
-              const columns = schemaData.schema.map((col: any) => col.name);
+              const columns = schemaData.rows.map((col: any) => col.name);
               allColumnNames.push(...columns);
             } else {
               console.error(`Error fetching schema for table ${table}:`, schemaData.error);

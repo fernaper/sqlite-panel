@@ -2,7 +2,7 @@ services:
 
   # Publicly accessible containers
   app:
-    image: fernaperg/sqlite-panel:v1.1.0
+    image: fernaperg/sqlite-panel:v1.2.0
     build:
       context: .
     deploy:
