@@ -1,22 +1,20 @@
 import { useState, useEffect } from 'react';
 import SqlQueryExecutor from '@/components/layout/SqlQueryExecutor.tsx';
+import type { SingleQueryResult, ExecutorResponse } from '@/components/layout/SqlQueryExecutor.tsx';
 import TableViewer from '@/components/layout/TableViewer.tsx'
-
-interface QueryResult {
-  columns: { name: string }[];
-  rows: { [key: string]: any }[];
-}
+import Card from '@/components/ui/Card.tsx';
 
 interface AdminContentProps {
   dbPath: string;
 }
 
 export default function AdminContent({ dbPath }: AdminContentProps) {
-  const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-  const [dbInfo, setDbInfo] = useState<QueryResult | null>(null);
+  const [queryResults, setQueryResults] = useState<ExecutorResponse | null>(null);
+  const [dbInfo, setDbInfo] = useState<SingleQueryResult | null>(null);
+  const [initialTableName, setInitialTableName] = useState<string | null>(null); // State for initial table view
 
-  const handleQueryResult = (result: QueryResult | null) => {
-    setQueryResult(result);
+  const handleQueryResults = (results: ExecutorResponse | null) => {
+    setQueryResults(results);
   };
 
   useEffect(() => {
@@ -26,6 +24,10 @@ export default function AdminContent({ dbPath }: AdminContentProps) {
         const data = await response.json();
         if (response.ok) {
           setDbInfo(data);
+          // Set the first table name from dbInfo as the initial table to display
+          if (data?.rows && data.rows.length > 0 && data.rows[0].name) {
+            setInitialTableName(data.rows[0].name);
+          }
         } else {
           console.error('Error fetching database info:', data.error || 'Unknown error');
         }
@@ -41,11 +43,47 @@ export default function AdminContent({ dbPath }: AdminContentProps) {
       <h1 className="text-sm font-bold my-3 text-gray-500 dark:text-gray-300">Database: {dbPath}</h1>
 
       {/* SQL Query Executor */}
-      <SqlQueryExecutor onQueryResult={handleQueryResult} />
+      <SqlQueryExecutor onQueryResults={handleQueryResults} />
 
       {/* Render TableViewer component */}
-      <TableViewer initialData={queryResult} dbInfo={dbInfo} />
+      {((!queryResults?.results || queryResults?.results?.length === 0) && initialTableName) || (queryResults === null && initialTableName === null) ? (
+        <TableViewer tableName={initialTableName} dbInfo={dbInfo} />
+      ) : (
+        queryResults?.results && queryResults?.results.length > 0 && (
+          <div className="mt-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Query Results</h3>
+            {queryResults?.results?.map((result, index) => (
+              <div key={index} className="mb-4">
+                {/* Display the executed query */}
+                {queryResults?.queries?.[index] && queryResults.queries.length > 1 ? (
+                  <div className="mb-2">
+                    <p className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Query {index + 1}:</p>
+                    <pre className="bg-gray-100 dark:bg-gray-800 p-2 rounded text-sm overflow-auto">{queryResults?.queries?.[index]}</pre>
+                  </div>
+                ) : <></>}
 
+                {/* Render TableViewer for SELECT results or Card for others */}
+                {result.columns && result.rows ? (
+                  // Render TableViewer for SELECT results
+                  <TableViewer initialData={result} />
+                ) : (
+                  // Render Card for errors or non-SELECT success
+                  <Card>
+                    {result.error ? (
+                      <>
+                        <p className="font-semibold text-red-600 dark:text-red-400">Error:</p>
+                        <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-sm overflow-auto">{result.error}</pre>
+                      </>
+                    ) : (
+                      <p className="text-gray-600 dark:text-gray-400">Query executed successfully (no rows returned).</p>
+                    )}
+                  </Card>
+                )}
+              </div>
+            ))}
+          </div>
+        )
+      )}
     </main>
   );
 }

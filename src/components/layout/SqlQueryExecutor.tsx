@@ -5,16 +5,23 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import Button from '@/components/ui/Button.tsx';
 import Card from '@/components/ui/Card.tsx';
 
-interface QueryResult {
-  columns: { name: string }[];
-  rows: { [key: string]: any }[];
+export interface SingleQueryResult {
+  columns?: { name: string }[];
+  rows?: { [key: string]: any }[];
+  query?: string;
+  error?: string;
+}
+
+export interface ExecutorResponse {
+  results: SingleQueryResult[];
+  queries: string[];
 }
 
 interface SqlQueryExecutorProps {
-  onQueryResult: (result: QueryResult | null) => void;
+  onQueryResults: (results: ExecutorResponse | null) => void;
 }
 
-export default function SqlQueryExecutor({ onQueryResult }: SqlQueryExecutorProps) {
+export default function SqlQueryExecutor({ onQueryResults }: SqlQueryExecutorProps) {
   const [sqlQuery, setSqlQuery] = useState('');
   const [markdownContent, setMarkdownContent] = useState('');
   const [editorMode, setEditorMode] = useState<'sql' | 'markdown'>('sql');
@@ -231,10 +238,10 @@ export default function SqlQueryExecutor({ onQueryResult }: SqlQueryExecutorProp
         const data = await response.json();
 
         if (response.ok) {
-          onQueryResult(data);
+          onQueryResults(data); // Call the prop with the array of results
         } else {
           setError(data.error || 'An unknown error occurred.');
-          onQueryResult(null); // Clear previous results on error
+          onQueryResults(null); // Clear previous results on error
         }
       } else { // editorMode === 'markdown'
         const response = await fetch('/api/db/generate-query', {
@@ -252,10 +259,10 @@ export default function SqlQueryExecutor({ onQueryResult }: SqlQueryExecutorProp
           setSqlQuery(data.query);
           setEditorMode('sql');
           setMarkdownContent('');
-          onQueryResult(null); // Clear previous results when generating a new query
+          onQueryResults(null); // Clear previous results when generating a new query
         } else {
           setError(data.error || 'An unknown error occurred.');
-          onQueryResult(null); // Clear previous results on error
+          onQueryResults(null); // Clear previous results on error
         }
       }
     } catch (err) {
@@ -319,7 +326,6 @@ export default function SqlQueryExecutor({ onQueryResult }: SqlQueryExecutorProp
           <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-sm overflow-auto">{error}</pre>
         </div>
       )}
-
     </Card>
   );
 }

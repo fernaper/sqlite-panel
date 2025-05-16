@@ -45,24 +45,39 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       return new Response(JSON.stringify({ error: 'Failed to open database' }), { status: 500 });
     }
 
-    const queryResult = await new Promise((resolve, reject) => {
-      // Use db.all for queries that return rows (SELECT)
-      // For other queries (INSERT, UPDATE, DELETE), db.run might be more appropriate,
-      // but db.all can also work and return info about changes.
-      db.all(sqlQuery, [], (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          // If rows are returned, get column names from the first row if available
-          const columns = rows.length > 0 ? Object.keys(rows[0] as object).map(name => ({ name })) : [];
-          resolve({ columns, rows });
-        }
-      });
-    });
+    const queries = sqlQuery.split(';').map((q: string) => q.trim()).filter((q: string) => q.length > 0);
+    const results = [];
+
+    for (const query of queries) {
+      if (!query) continue; // Skip empty queries
+
+      try {
+        const queryResult = await new Promise((resolve, reject) => {
+          // Use db.all for queries that return rows (SELECT)
+          // For other queries (INSERT, UPDATE, DELETE), db.run might be more appropriate,
+          // but db.all can also work and return info about changes.
+          db.all(query, [], (err, rows) => {
+            if (err) {
+              reject(err);
+            } else {
+              // If rows are returned, get column names from the first row if available
+              const columns = rows && rows.length > 0 ? Object.keys(rows[0] as object).map(name => ({ name })) : [];
+              resolve({ columns, rows });
+            }
+          });
+        });
+        results.push(queryResult);
+      } catch (error) {
+        // Handle error for a specific query
+        console.error(`Error executing query "${query}":`, error);
+        results.push({ query, error: error instanceof Error ? error.message : 'Query failed' });
+        // Decide whether to continue or stop on error. For now, continue.
+      }
+    }
 
     db.close();
 
-    return new Response(JSON.stringify(queryResult), { status: 200 });
+    return new Response(JSON.stringify({queries, results}), { status: 200 }); // Return array of results
   } catch (error) {
     console.error('Error executing SQL query:', error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to execute SQL query' }), { status: 500 });

@@ -22,7 +22,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
       return new Response(JSON.stringify({ error: 'Database path not found in session' }), { status: 500 });
     }
 
-    const tableName = url.searchParams.get('tableName');
+    const tableName = url.searchParams.get('tableName') || url.searchParams.get('table');
     if (!tableName) {
       return new Response(JSON.stringify({ error: 'Table name parameter is required' }), { status: 400 });
     }
