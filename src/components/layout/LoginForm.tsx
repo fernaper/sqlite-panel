@@ -46,8 +46,9 @@ export default function LoginForm() {
       const result = await response.json();
       console.log('result', result)
 
-      if (response.ok && result.success) {
-        console.log('Login successful, redirecting...');
+      if (response.ok && result.success && result.token) {
+        console.log('Login successful, storing token and redirecting...');
+        localStorage.setItem('sqlite-panel-jwt', result.token); // Store the JWT
         window.location.href = '/admin'; // Redirect on success
       } else {
         console.error('Login failed:', result.message);

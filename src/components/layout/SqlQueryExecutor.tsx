@@ -55,9 +55,21 @@ export default function SqlQueryExecutor({ onQueryResults }: SqlQueryExecutorPro
 
   useEffect(() => {
     const fetchDbInfo = async () => {
+      const token = localStorage.getItem('sqlite-panel-jwt');
+      if (!token) {
+        console.error('JWT not found in localStorage');
+        setError('Authentication token not found. Please log in again.');
+        window.location.href = '/login';
+        return;
+      }
+
       try {
         // Fetch table names
-        const tablesResponse = await fetch('/api/db/tables');
+        const tablesResponse = await fetch('/api/db/tables', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         const tablesData = await tablesResponse.json();
         if (tablesResponse.ok) {
           setTableNames(tablesData.tables);
@@ -65,22 +77,37 @@ export default function SqlQueryExecutor({ onQueryResults }: SqlQueryExecutorPro
           // Fetch column names for each table
           const allColumnNames: string[] = [];
           for (const table of tablesData.tables) {
-            const schemaResponse = await fetch(`/api/db/table-schema?tableName=${table}`);
+            const schemaResponse = await fetch(`/api/db/table-schema?tableName=${table}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
             const schemaData = await schemaResponse.json();
             if (schemaResponse.ok) {
               const columns = schemaData.rows.map((col: any) => col.name);
               allColumnNames.push(...columns);
             } else {
-              console.error(`Error fetching schema for table ${table}:`, schemaData.error);
+              console.error(`Error fetching schema for table ${table}:`, schemaData.error || 'Unknown error');
+              // Handle unauthorized response
+              if (schemaResponse.status === 401) {
+                window.location.href = '/login';
+                return;
+              }
             }
           }
           // Remove duplicates and update state
           setColumnNames(Array.from(new Set(allColumnNames)));
         } else {
-          console.error('Error fetching tables:', tablesData.error);
+          console.error('Error fetching tables:', tablesData.error || 'Unknown error');
+          // Handle unauthorized response
+          if (tablesResponse.status === 401) {
+            window.location.href = '/login';
+            return;
+          }
         }
       } catch (error) {
         console.error('Error fetching database info:', error);
+        setError('An error occurred while fetching database information.');
       }
     };
 
@@ -224,15 +251,25 @@ export default function SqlQueryExecutor({ onQueryResults }: SqlQueryExecutorPro
     setLoading(true);
     setError(null);
 
+    const token = localStorage.getItem('sqlite-panel-jwt');
+    if (!token) {
+      console.error('JWT not found in localStorage');
+      setError('Authentication token not found. Please log in again.');
+      // Optionally redirect to login page
+      window.location.href = '/login';
+      setLoading(false);
+      return; // Stop execution
+    }
+
     try {
       if (editorMode === 'sql') {
         const response = await fetch('/api/db/execute-query', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` // Include JWT
           },
           body: JSON.stringify({ sqlQuery }),
-          credentials: 'include',
         });
 
         const data = await response.json();
@@ -240,17 +277,23 @@ export default function SqlQueryExecutor({ onQueryResults }: SqlQueryExecutorPro
         if (response.ok) {
           onQueryResults(data); // Call the prop with the array of results
         } else {
+          console.error('Error executing query:', data.error || 'An unknown error occurred.');
           setError(data.error || 'An unknown error occurred.');
           onQueryResults(null); // Clear previous results on error
+           // Handle unauthorized response specifically
+           if (response.status === 401) {
+            // toast.error('Session expired. Please log in again.'); // Toast handled by AdminContent or parent
+            window.location.href = '/login'; // Redirect to login on unauthorized
+           }
         }
       } else { // editorMode === 'markdown'
         const response = await fetch('/api/db/generate-query', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` // Include JWT
           },
           body: JSON.stringify({ prompt: markdownContent }),
-          credentials: 'include',
         });
 
         const data = await response.json();
@@ -261,8 +304,14 @@ export default function SqlQueryExecutor({ onQueryResults }: SqlQueryExecutorPro
           setMarkdownContent('');
           onQueryResults(null); // Clear previous results when generating a new query
         } else {
+          console.error('Error generating query:', data.error || 'An unknown error occurred.');
           setError(data.error || 'An unknown error occurred.');
           onQueryResults(null); // Clear previous results on error
+           // Handle unauthorized response specifically
+           if (response.status === 401) {
+            // toast.error('Session expired. Please log in again.'); // Toast handled by AdminContent or parent
+            window.location.href = '/login'; // Redirect to login on unauthorized
+           }
         }
       }
     } catch (err) {

@@ -224,6 +224,14 @@ export default function TableViewer({ initialData, dbInfo, tableName: propTableN
     // Only fetch data if initialData is NOT provided and tableName is set
     if (!initialData && tableName) {
       const fetchData = async () => {
+        const token = localStorage.getItem('sqlite-panel-jwt');
+        if (!token) {
+          console.error('JWT not found in localStorage');
+          // Optionally redirect to login page
+          window.location.href = '/login';
+          return; // Stop execution
+        }
+
         try {
           let url;
           if (viewMode === 'info') {
@@ -241,7 +249,11 @@ export default function TableViewer({ initialData, dbInfo, tableName: propTableN
             }
           }
 
-          const response = await fetch(url.toString(), { credentials: 'include' });
+          const response = await fetch(url.toString(), {
+            headers: {
+              'Authorization': `Bearer ${token}` // Include JWT
+            }
+          });
           const data = await response.json();
           if (response.ok) {
             if (viewMode === 'info') {
@@ -255,9 +267,17 @@ export default function TableViewer({ initialData, dbInfo, tableName: propTableN
           } else {
             console.error(`Error fetching ${viewMode} data:`, data.error || 'Unknown error');
             // Optionally set an error state here to display to the user
+             // Handle unauthorized response specifically
+             if (response.status === 401) {
+              toast.error('Session expired. Please log in again.');
+              window.location.href = '/login'; // Redirect to login on unauthorized
+             } else {
+              toast.error(`Error fetching ${viewMode} data: ${data.error || 'Unknown error'}`);
+             }
           }
         } catch (error) {
           console.error(`Error fetching ${viewMode} data:`, error);
+          toast.error(`An error occurred while fetching ${viewMode} data.`);
         }
       };
       fetchData();
@@ -282,16 +302,34 @@ export default function TableViewer({ initialData, dbInfo, tableName: propTableN
     ) || cellValue === '[Blob Data]';
   };
 
-  const handleDownloadBlob = (rowIndex: number, columnName: string) => {
+  const handleDownloadBlob = async (rowIndex: number, columnName: string) => {
+    const token = localStorage.getItem('sqlite-panel-jwt');
+    if (!token) {
+      console.error('JWT not found in localStorage');
+      toast.error('Authentication token not found. Please log in again.');
+      window.location.href = '/login';
+      return;
+    }
+
     const url = new URL(`/api/db/blob-data`, window.location.origin);
     url.searchParams.set('table', tableName!);
     url.searchParams.set('rowIndex', rowIndex.toString());
     url.searchParams.set('columnName', columnName);
+    url.searchParams.set('token', token);
     window.open(url.toString(), '_blank');
   };
   
   // Accept rowIndex as parameter
   const handleBlobUpdate = async (rowIndex: number, columnName: string, file: File) => {
+    const token = localStorage.getItem('sqlite-panel-jwt');
+    if (!token) {
+      console.error('JWT not found in localStorage');
+      toast.error('Authentication token not found. Please log in again.');
+      // Optionally redirect to login page
+      window.location.href = '/login';
+      return; // Stop execution
+    }
+
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -302,12 +340,20 @@ export default function TableViewer({ initialData, dbInfo, tableName: propTableN
       const response = await fetch(`/api/db/update-blob-data`, {
         method: 'POST',
         body: formData,
-        credentials: 'include'
+        headers: {
+          'Authorization': `Bearer ${token}` // Include JWT
+        },
       });
   
       if (!response.ok) {
         const errorData = await response.json();
-        toast.error(`Failed to update blob: ${errorData.error}`);
+        console.error('Error updating blob:', errorData.error || 'Unknown error');
+        toast.error(`Failed to update blob: ${errorData.error || 'Unknown error'}`);
+         // Handle unauthorized response specifically
+         if (response.status === 401) {
+          // toast.error('Session expired. Please log in again.'); // Toast handled by AdminContent or parent
+          window.location.href = '/login'; // Redirect to login on unauthorized
+         }
       } else {
         toast.success('Blob updated successfully!');
         // Update the table data optimistically
@@ -320,7 +366,7 @@ export default function TableViewer({ initialData, dbInfo, tableName: propTableN
       }
     } catch (error) {
       console.error('Error updating blob data:', error);
-      toast.error('Failed to update blob');
+      toast.error('An error occurred while updating blob data.');
     }
   };
 
@@ -461,23 +507,36 @@ export default function TableViewer({ initialData, dbInfo, tableName: propTableN
 
                                           // Send update to API
                                           try {
+                                            const token = localStorage.getItem('sqlite-panel-jwt');
+                                            if (!token) {
+                                              console.error('JWT not found in localStorage');
+                                              toast.error('Authentication token not found. Please log in again.');
+                                              window.location.href = '/login';
+                                              return;
+                                            }
+
                                             const response = await fetch('/api/db/update-table-data', {
                                               method: 'POST',
                                               headers: {
                                                 'Content-Type': 'application/json',
+                                                'Authorization': `Bearer ${token}` // Include JWT
                                               },
                                               body: JSON.stringify({
                                                 table: tableName,
-                                                rowIndex: rowIndex, // Pass the row index
+                                                rowIndex: rowIndex,
                                                 columnName: col.name,
                                                 newValue: tempValue,
-                                              }),
-                                              credentials: 'include',
+                                              })
                                             });
 
                                             if (!response.ok) {
                                               const errorData = await response.json();
-                                              toast.error(`Failed to update cell: ${errorData.error}`);
+                                              console.error('Error updating cell:', errorData.error || 'Unknown error');
+                                              toast.error(`Failed to update cell: ${errorData.error || 'Unknown error'}`);
+                                              // Handle unauthorized response specifically
+                                              if (response.status === 401) {
+                                                window.location.href = '/login'; // Redirect to login on unauthorized
+                                              }
                                               // Revert UI on error
                                               setTableData(originalTableData);
                                             } else {
@@ -485,7 +544,7 @@ export default function TableViewer({ initialData, dbInfo, tableName: propTableN
                                             }
                                           } catch (error) {
                                             console.error('Error updating cell:', error);
-                                            toast.error('Failed to update cell');
+                                            toast.error('An error occurred while updating the cell.');
                                             // Revert UI on error
                                             setTableData(originalTableData);
                                           }

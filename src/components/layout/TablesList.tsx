@@ -14,7 +14,18 @@ export default function TablesList() {
 
     const fetchTables = async () => {
       try {
-        const response = await fetch('/api/db/tables', { credentials: 'include' });
+        const token = localStorage.getItem('sqlite-panel-jwt');
+        if (!token) {
+          console.error('JWT not found in localStorage');
+          window.location.href = '/login';
+          return;
+        }
+        const response = await fetch(
+          '/api/db/tables', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         const data = await response.json();
         if (response.ok) {
           setTables(data.tables || []);

@@ -1,10 +1,14 @@
 import type { APIRoute } from 'astro';
 import sqlite3 from 'sqlite3';
+import jwt from 'jsonwebtoken'; // Import jsonwebtoken
 const { Database } = sqlite3;
 
 export const prerender = false; // Mark this route as server-rendered
 
-export const POST: APIRoute = async ({ request, cookies, redirect }) => {
+// Define JWT secret key from environment variables
+const JWT_SECRET = import.meta.env.JWT_SECRET || 'your_default_secret_key'; // Use a strong secret in production
+
+export const POST: APIRoute = async ({ request }) => {
   try {
     const formData = await request.formData();
     const username = formData.get('username')?.toString();
@@ -42,18 +46,15 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         db.close();
         db = null; // Set db to null after closing
 
-        // --- Session Management ---
-        // Store necessary info (like dbPath) securely.
-        // Using a simple cookie here for demonstration. Use a more robust session mechanism in production.
-        cookies.set('sqlite-panel-session', JSON.stringify({ loggedIn: true, dbPath: databasePath }), {
-          path: '/',
-          httpOnly: true,
-          secure: import.meta.env.PROD,
-          maxAge: 60 * 60 * 24,
-        });
+        // --- Token Generation ---
+        // Generate a JWT upon successful authentication
+        const token = jwt.sign({
+            loggedIn: true,
+            dbPath: databasePath,
+          }, JWT_SECRET, { expiresIn: '1h' }); // Token expires in 1 hour
 
-        // Return success response
-        return new Response(JSON.stringify({ success: true, message: 'Login successful.' }), { status: 200 });
+        // Return success response with the token
+        return new Response(JSON.stringify({ success: true, message: 'Login successful.', token }), { status: 200 });
 
       } catch (dbError) {
         console.error('Database connection check failed:', dbError);

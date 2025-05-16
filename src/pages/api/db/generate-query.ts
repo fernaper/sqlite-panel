@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import sqlite3 from 'sqlite3';
+import { verifyToken } from '@/utils/auth';
 const { Database } = sqlite3;
 
 export const prerender = false;
@@ -56,7 +57,7 @@ async function getDatabaseSchema(dbPath: string): Promise<string> {
 }
 
 
-export const POST: APIRoute = async ({ request, cookies }) => {
+export const POST: APIRoute = async ({ request }) => {
   const { prompt } = await request.json();
 
   if (!model) {
@@ -68,22 +69,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     });
   }
 
-  const session = cookies.get('sqlite-panel-session');
-  if (!session) {
+  // Authenticate the request using the JWT
+  const decodedToken = verifyToken(request);
+  if (!decodedToken || !decodedToken.loggedIn || !decodedToken.dbPath) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 
-  let dbPath;
-  try {
-    dbPath = JSON.parse(session.value)?.['dbPath'];
-  } catch (error) {
-    console.error('Error parsing session cookie:', error);
-    return new Response(JSON.stringify({ error: 'Invalid session cookie' }), { status: 500 });
-  }
-  if (!dbPath) {
-    return new Response(JSON.stringify({ error: 'Database path not found in session' }), { status: 500 });
-  }
-
+  const dbPath = decodedToken.dbPath;
 
   try {
     const dbSchema = await getDatabaseSchema(dbPath);

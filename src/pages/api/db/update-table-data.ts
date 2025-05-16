@@ -1,20 +1,19 @@
 import type { APIRoute } from 'astro';
 import sqlite3 from 'sqlite3';
+import { verifyToken } from '@/utils/auth';
 const { Database } = sqlite3;
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ cookies, request }) => {
+export const POST: APIRoute = async ({ request }) => {
   try {
-    const session = cookies.get('sqlite-panel-session');
-    if (!session) {
+    // Authenticate the request using the JWT
+    const decodedToken = verifyToken(request);
+    if (!decodedToken || !decodedToken.loggedIn || !decodedToken.dbPath) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     }
 
-    const { dbPath } = JSON.parse(session.value);
-    if (!dbPath) {
-      return new Response(JSON.stringify({ error: 'Database path not found in session' }), { status: 500 });
-    }
+    const dbPath = decodedToken.dbPath;
 
     const { table, rowIndex, columnName, newValue } = await request.json();
     if (!table || rowIndex === undefined || !columnName || newValue === undefined) {

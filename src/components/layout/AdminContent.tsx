@@ -23,7 +23,20 @@ export default function AdminContent({ dbPath }: AdminContentProps) {
 
   const refreshDatabaseInfo = async () => {
     try {
-      const response = await fetch('/api/db/info', { credentials: 'include' });
+      const token = localStorage.getItem('sqlite-panel-jwt');
+      if (!token) {
+        // Handle case where token is not found (e.g., redirect to login)
+        console.error('JWT not found in localStorage');
+        // Optionally redirect to login page
+        window.location.href = '/login';
+        return; // Stop execution
+      }
+
+      const response = await fetch('/api/db/info', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await response.json();
       if (response.ok) {
         setDbInfo(data);
@@ -33,9 +46,17 @@ export default function AdminContent({ dbPath }: AdminContentProps) {
         }
       } else {
         console.error('Error fetching database info:', data.error || 'Unknown error');
+        // Handle unauthorized response specifically
+        if (response.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          window.location.href = '/login'; // Redirect to login on unauthorized
+        } else {
+          toast.error(`Error fetching database info: ${data.error || 'Unknown error'}`);
+        }
       }
     } catch (error) {
       console.error('Error fetching database info:', error);
+      toast.error('An error occurred while fetching database info.');
     }
   };
 
